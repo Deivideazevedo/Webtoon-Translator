@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Webtoon Translator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <section id="view-home">
+    <div class="header">
+      <h1>Webtoon Translator</h1>
+      <button id="open_settings_btn" class="secondary icon-btn corner" type="button" title="Configurações">⚙</button>
+    </div>
+    <div class="row" style="align-items:center;">
+      <button id="capture_btn" style="flex:1;">🔲 Capturar área da tela</button>
+      <select id="quick_model_select" class="pill-select" title="Modelo atual" style="display:none;"></select>
+    </div>
+    <div id="capture_status" class="status"></div>
+
+    <div id="list"></div>
+  </section>
+
+  <section id="view-settings" style="display: none;">
+    <div class="header">
+      <button id="back_btn" class="secondary icon-btn" type="button" title="Voltar">←</button>
+      <h1>Configurações</h1>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="connection" type="button">Conexão</button>
+      <button class="tab" data-tab="shortcuts" type="button">Atalhos</button>
+      <button class="tab" data-tab="general" type="button">Geral</button>
+    </div>
+
+    <div id="tab-connection" class="tab-panel">
+      <details class="card" id="provider_details">
+        <summary>
+          <span>Provedor</span>
+          <span id="provider_summary_value" class="provider-current"></span>
+          <span class="chevron">▾</span>
+        </summary>
+        <div class="details-body">
+          <label for="provider">Provedor</label>
+          <select id="provider">
+            <option value="openai">Gateway compatível com OpenAI (omniroute, etc.)</option>
+            <option value="anthropic">Anthropic direto (API Claude)</option>
+            <option value="google">Google AI Studio (API Gemini)</option>
+          </select>
+
+          <label for="base_url">URL do gateway</label>
+          <input id="base_url" type="text" placeholder="http://localhost">
+
+          <label for="api_key">Chave de API</label>
+          <input id="api_key" type="password" placeholder="sk-...">
+
+          <div class="row">
+            <button id="test_btn">Testar conexão</button>
+          </div>
+          <div id="test_status" class="status"></div>
+        </div>
+      </details>
+
+      <div class="card">
+        <label for="model_input">Modelo (qualquer um de texto serve — a leitura da imagem é feita localmente por OCR)</label>
+        <div class="row" style="align-items:center;">
+          <div class="combo">
+            <input id="model_input" type="text" autocomplete="off" spellcheck="false" role="combobox"
+              aria-autocomplete="list" aria-expanded="false" aria-controls="model_listbox" disabled
+              placeholder="Teste a conexão para listar os modelos">
+            <button id="model_clear" class="combo-btn" type="button" title="Limpar" tabindex="-1" hidden>✕</button>
+            <button id="model_toggle" class="combo-btn" type="button" title="Mostrar todos" tabindex="-1">▾</button>
+            <ul id="model_listbox" class="combo-list" role="listbox" hidden></ul>
+          </div>
+          <button id="favorite_btn" class="secondary icon-btn" type="button" title="Favoritar este modelo">☆</button>
+        </div>
+
+        <div class="row" style="margin-top:14px;">
+          <button id="save_btn">Salvar</button>
+          <button id="speed_test_btn" class="secondary" type="button">⏱ Testar velocidade</button>
+        </div>
+        <div id="save_status" class="status"></div>
+        <div id="speed_status" class="status"></div>
+      </div>
+
+      <div class="card">
+        <label>Benchmark de velocidade</label>
+        <p class="hint">Mede todos os modelos listados com uma tradução de teste real e marca os 5 mais rápidos
+          (e que não falharam) como favoritos deste provedor, substituindo os favoritos atuais.</p>
+        <button id="bench_btn" class="secondary" type="button" style="width:100%;">🏁 Rodar benchmark</button>
+        <div id="bench_status" class="status"></div>
+        <ol id="bench_results" class="bench-results"></ol>
+      </div>
+    </div>
+
+    <div id="tab-shortcuts" class="tab-panel" style="display: none;">
+      <div class="card">
+        <label>Atalho global para "Capturar área da tela"</label>
+        <button id="shortcut_btn" class="secondary" type="button" style="width:100%; margin-bottom:10px;"></button>
+        <div id="shortcut_status" class="status"></div>
+      </div>
+    </div>
+
+    <div id="tab-general" class="tab-panel" style="display: none;">
+      <div class="card">
+        <label style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:14px; color:var(--text); white-space:nowrap;">
+          <input id="always_on_top" type="checkbox" style="width:auto; margin:0;">
+          Manter sempre visível (por cima)
+        </label>
+      </div>
+
+      <div class="card">
+        <label for="speech_speed">Velocidade da voz (<span id="speech_speed_value">0.9x</span>)</label>
+        <input id="speech_speed" type="range" min="0.5" max="1.5" step="0.05" value="0.9">
+      </div>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

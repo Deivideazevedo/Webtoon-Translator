@@ -1,0 +1,264 @@
+:root {
+  --bg: #0f1117;
+  --card: #1a1d27;
+  --text: #e8e8ef;
+  --muted: #9aa0b4;
+  --accent: #6ea8ff;
+  --border: #2a2e3d;
+  --danger: #ff6e6e;
+  --ok: #4fd18b;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --text: #1a1d27;
+    --muted: #5a5f73;
+    --accent: #2a63d6;
+    --border: #e1e4ee;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 20px;
+}
+h1 { font-size: 16px; margin: 0; }
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  margin-bottom: 16px;
+}
+.header h1 {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.header .icon-btn.corner {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--muted);
+  padding: 8px 14px;
+  font-size: 13px;
+  border-bottom: 2px solid transparent;
+}
+.tab.active {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+input, select {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0b4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  padding-right: 32px;
+}
+input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: none;
+}
+input[type="range"] {
+  width: 100%;
+  padding: 0;
+  margin: 0 0 4px;
+  background: none;
+  border: none;
+  accent-color: var(--accent);
+}
+.pill-select {
+  width: auto;
+  max-width: 140px;
+  margin: 0;
+  flex-shrink: 0;
+  padding: 8px 28px 8px 12px;
+  border-radius: 8px;
+  background-color: var(--card);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+input:disabled, select:disabled {
+  background: var(--card);
+  color: var(--muted);
+  opacity: .8;
+  cursor: default;
+}
+button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+button.secondary {
+  background: none;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+button:disabled { opacity: .5; cursor: default; }
+.row { display: flex; gap: 10px; }
+.status { font-size: 13px; margin-top: 8px; min-height: 18px; word-break: break-word; overflow-wrap: anywhere; }
+.status.ok { color: var(--ok); }
+.status.error { color: var(--danger); }
+.empty { color: var(--muted); text-align: center; padding: 40px 16px; }
+
+/* Combobox de modelo, no estilo do Autocomplete do MUI: abrir sempre mostra a lista inteira,
+   só filtra enquanto se digita, e tem ✕ pra limpar. */
+.combo { position: relative; flex: 1; min-width: 0; }
+.combo input { margin-bottom: 0; padding-right: 58px; }
+.combo-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 2px 6px;
+  font-size: 13px;
+}
+.combo-btn:hover { color: var(--text); }
+#model_clear { right: 28px; }
+#model_toggle { right: 4px; }
+.combo-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+.combo-list li {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.combo-list li.active { background: var(--border); }
+.combo-list li.selected { color: var(--accent); }
+.combo-list li.empty { color: var(--muted); cursor: default; }
+
+.hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.4; }
+.bench-results { margin: 8px 0 0; padding-left: 22px; font-size: 13px; max-height: 240px; overflow-y: auto; }
+.bench-results li { margin: 3px 0; overflow-wrap: anywhere; }
+.bench-results .fail, .bench-results .muted { color: var(--muted); }
+
+details.card {
+  padding: 0;
+}
+details.card > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+details.card > summary::-webkit-details-marker,
+details.card > summary::marker {
+  display: none;
+  content: "";
+}
+details.card > summary > span:first-child {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+details.card > summary .provider-current {
+  color: var(--text);
+  font-size: 13px;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+details.card > summary .chevron {
+  color: var(--muted);
+  transition: transform .15s ease;
+  flex-shrink: 0;
+}
+details.card[open] > summary .chevron {
+  transform: rotate(180deg);
+}
+details.card .details-body {
+  padding: 0 20px 16px;
+}

@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Capacidades padrão das janelas do app",
+  "windows": ["main", "capture-overlay", "bubble"],
+  "permissions": ["core:default"]
+}

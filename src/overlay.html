@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Selecionar área</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.1);
+    cursor: crosshair;
+    overflow: hidden;
+    font-family: system-ui, sans-serif;
+  }
+  #sel {
+    position: absolute;
+    border: 2px solid #6ea8ff;
+    background: rgba(110, 168, 255, 0.15);
+    display: none;
+  }
+  #hint {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #e8e8ef;
+    background: rgba(15, 17, 23, 0.75);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div id="hint">Arraste pra selecionar a área • Esc cancela</div>
+  <div id="sel"></div>
+  <script src="overlay.js"></script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Tradução</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  html, body { background: transparent; padding: 0; }
+  .bubble-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .bubble-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    cursor: move;
+    font-size: 13px;
+    color: var(--muted);
+    user-select: none;
+  }
+  .bubble-body { padding: 12px; overflow-y: auto; flex: 1; font-size: 13px; }
+  .bubble-body .chunk { border-top: 1px solid var(--border); padding: 8px 0; }
+  .bubble-body .chunk:first-child { border-top: none; }
+  .bubble-body .chunk-head { display: flex; align-items: center; gap: 6px; }
+  .bubble-body .segment { font-weight: 600; color: var(--accent); }
+  .bubble-body .pron { color: var(--muted); font-size: 12px; }
+  .bubble-body .note { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .bubble-body .translation { font-size: 15px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .bubble-body .original { color: var(--muted); font-style: italic; }
+  .bubble-body .skeleton { color: var(--muted); font-style: italic; }
+  .bubble-body { overflow-x: hidden; }
+  .bubble-body .w { position: relative; cursor: help; border-bottom: 1px dotted transparent; }
+  .bubble-body .w:hover { color: var(--text); border-bottom-color: var(--accent); }
+  .bubble-body .w:hover::after {
+    content: attr(data-gloss);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 4px);
+    z-index: 10;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-style: normal;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .bubble-body .original-pron { color: var(--muted); font-size: 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .speak {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 1px 6px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+  <div class="bubble-card">
+    <div class="bubble-head" data-tauri-drag-region>
+      <span data-tauri-drag-region>↕ <span id="bubble_model">Tradução</span></span>
+      <button id="close_btn" class="secondary icon-btn" style="width:22px;height:22px;font-size:12px;" type="button">✕</button>
+    </div>
+    <div class="bubble-body" id="content">Carregando...</div>
+  </div>
+  <script src="bubble.js"></script>
+</body>
+</html>
