@@ -1808,13 +1808,16 @@ async fn do_capture_and_translate(
     let (min_x, min_y, _, _) = virtual_desktop_bounds()?;
     let abs_x = min_x + client_x as i32;
     let abs_y = min_y + client_y as i32;
-    let (monitor, rel_x, rel_y, clamped_w, clamped_h) =
-        resolve_monitor_region(abs_x, abs_y, width, height)?;
-
     let capture_started = std::time::Instant::now();
-    let captured = monitor
-        .capture_region(rel_x, rel_y, clamped_w, clamped_h)
-        .map_err(|e| e.to_string())?;
+    // O xcap::Monitor não é Send no Windows (guarda um HMONITOR): ele precisa ser descartado
+    // dentro deste bloco, antes de qualquer `.await`, senão o comando não compila lá.
+    let captured = {
+        let (monitor, rel_x, rel_y, clamped_w, clamped_h) =
+            resolve_monitor_region(abs_x, abs_y, width, height)?;
+        monitor
+            .capture_region(rel_x, rel_y, clamped_w, clamped_h)
+            .map_err(|e| e.to_string())?
+    };
     perf_log(
         app,
         &session,
