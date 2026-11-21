@@ -51,8 +51,10 @@ A voz em inglês é opcional e baixada dentro do app (veja abaixo), então o ins
    - **Qualquer gateway compatível com OpenAI** (OpenRouter, um servidor local, etc.): informe a URL base
      (para o OpenRouter, `https://openrouter.ai/api`) e a chave.
 3. Clique em **Testar conexão**, escolha um modelo na lista e **Salvar**.
-4. Para ouvir a pronúncia: **Configurações → Voz → Baixar voz** (~305 MB, uma vez só). A voz roda no seu
-   computador, sem internet depois de instalada. Sem ela o app traduz normalmente, só não fala.
+4. Para ouvir a pronúncia: **Configurações → Voz** e baixe uma voz (uma vez só): **Natural** (Kokoro, ~305 MB,
+   mais expressiva) ou **Rápida** (Piper, ~78 MB, gera o áudio ~15x mais rápido e usa metade da memória).
+   Dá pra ter as duas e escolher. As vozes rodam no seu computador, sem internet depois de instaladas;
+   sem nenhuma o app traduz normalmente, só não fala.
 5. Opcional: **🏁 Rodar benchmark** mede todos os modelos com uma tradução de verdade e marca os 5 mais
    rápidos como favoritos. Cada modelo testado conta como uma chamada à API.
 
@@ -71,7 +73,7 @@ Dica: modelos "flash"/"mini"/"haiku" são os mais rápidos para esse uso.
 | O quê | Linux | Windows |
 |---|---|---|
 | Configurações, traduções recentes e favoritas, áudios dos favoritos | `~/.config/com.deivide.webtoontranslator/` | `%APPDATA%\com.deivide.webtoontranslator\` |
-| Voz baixada (~335 MB) | `~/.local/share/com.deivide.webtoontranslator/voices/` | `%LOCALAPPDATA%\com.deivide.webtoontranslator\voices\` |
+| Vozes baixadas (Kokoro ~335 MB, Piper ~75 MB) | `~/.local/share/com.deivide.webtoontranslator/voices/` | `%LOCALAPPDATA%\com.deivide.webtoontranslator\voices\` |
 | Chaves de API | Cofre de senhas do sistema (KWallet / GNOME Keyring) | Gerenciador de Credenciais do Windows |
 
 As chaves só saem do cofre se você exportar um backup com a opção "Incluir chaves de API" marcada.

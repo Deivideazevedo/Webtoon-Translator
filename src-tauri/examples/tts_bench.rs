@@ -22,13 +22,14 @@ fn main() {
 
     println!("RAM antes de carregar: {:.0} MB", rss_mb());
     let t = Instant::now();
-    let engine = tts::create_kokoro(&voice_dir, &lexicon).expect("falha ao carregar modelo");
+    let voices_dir = voice_dir.parent().unwrap();
+    let engine = tts::create_engine(&webtoon_core::voice::KOKORO, voices_dir, &lexicon).expect("falha ao carregar modelo");
     println!("Carregar modelo: {:.0} ms | RAM depois de carregar: {:.0} MB", t.elapsed().as_secs_f64() * 1000.0, rss_mb());
 
     for (i, phrase) in phrases.iter().enumerate() {
         for rep in 1..=2 {
             let t = Instant::now();
-            let (samples, rate) = tts::synthesize(&engine, phrase, speed).expect("falha ao gerar áudio");
+            let (samples, rate) = tts::synthesize(&engine, phrase, speed, 0).expect("falha ao gerar áudio");
             let ms = t.elapsed().as_secs_f64() * 1000.0;
             let secs = samples.len() as f64 / rate as f64;
             println!(

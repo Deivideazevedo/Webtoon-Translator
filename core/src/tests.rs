@@ -19,18 +19,19 @@ fn lexicon() -> PathBuf {
 #[cfg(all(test, feature = "kokoro"))]
 mod tts_smoke_test {
     use super::*;
-    use crate::tts::{create_kokoro, synthesize};
+    use crate::tts::{create_engine, synthesize};
+    use crate::voice::KOKORO;
 
     /// A voz é opcional (baixada pelo app); sem ela o teste só avisa e passa.
     #[test]
     fn kokoro_generates_audio() {
-        let voice = models_root().join("tts-models/kokoro-en-v0_19");
-        if !voice.join("model.onnx").exists() {
-            eprintln!("voz Kokoro não instalada em {voice:?}; rode scripts/fetch-models.sh pra testar");
+        let voices = models_root().join("tts-models");
+        if !crate::voice::is_installed(&voices, &KOKORO) {
+            eprintln!("voz Kokoro não instalada em {voices:?}; rode scripts/fetch-models.sh pra testar");
             return;
         }
-        let tts = create_kokoro(&voice, &lexicon()).expect("falha ao criar o motor de TTS");
-        let (samples, rate) = synthesize(&tts, "All right, let's start on this side.", 1.0).expect("falha ao gerar áudio");
+        let tts = create_engine(&KOKORO, &voices, &lexicon()).expect("falha ao criar o motor de TTS");
+        let (samples, rate) = synthesize(&tts, "All right, let's start on this side.", 1.0, 0).expect("falha ao gerar áudio");
         assert!(samples.len() > 1000, "áudio gerado está vazio demais");
         assert!(rate > 0);
         println!("OK: {} amostras, {rate} Hz, {:.2}s", samples.len(), samples.len() as f32 / rate as f32);
@@ -270,18 +271,18 @@ mod voice_tests {
     fn instala_do_pacote_so_os_arquivos_necessarios() {
         let archive = std::env::var("KOKORO_ARCHIVE").expect("defina KOKORO_ARCHIVE");
         let voices = temp_dir("install");
-        assert!(!is_installed(&voices));
-        install_archive(std::path::Path::new(&archive), &voices).unwrap();
-        assert!(is_installed(&voices));
-        let mut names: Vec<String> = std::fs::read_dir(kokoro_dir(&voices))
+        assert!(!is_installed(&voices, &KOKORO));
+        install_archive(&KOKORO, std::path::Path::new(&archive), &voices).unwrap();
+        assert!(is_installed(&voices, &KOKORO));
+        let mut names: Vec<String> = std::fs::read_dir(voice_dir(&voices, &KOKORO))
             .unwrap()
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         names.sort();
         assert_eq!(names, ["LICENSE", "README.md", "model.onnx", "tokens.txt", "voices.bin"]);
-        println!("instalada: {} MB", installed_bytes(&voices) / 1_048_576);
-        remove(&voices).unwrap();
-        assert!(!is_installed(&voices));
+        println!("instalada: {} MB", installed_bytes(&voices, &KOKORO) / 1_048_576);
+        remove(&voices, &KOKORO).unwrap();
+        assert!(!is_installed(&voices, &KOKORO));
         let _ = std::fs::remove_dir_all(&voices);
     }
 
@@ -291,7 +292,7 @@ mod voice_tests {
         let dir = temp_dir("cancel");
         let dest = dir.join("kokoro.tar.bz2");
         let cancel = AtomicBool::new(true);
-        let err = download_archive(&dest, &cancel, |_, _| {}).await.unwrap_err();
+        let err = download_archive(&KOKORO, &dest, &cancel, |_, _| {}).await.unwrap_err();
         assert!(err.contains("cancelado"), "{err}");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -305,7 +306,7 @@ mod voice_tests {
         let dest = dir.join("kokoro.tar.bz2");
         let cancel = AtomicBool::new(false);
         let mut last = 0;
-        download_archive(&dest, &cancel, |done, total| {
+        download_archive(&KOKORO, &dest, &cancel, |done, total| {
             let pct = done * 100 / total;
             if pct >= last + 25 {
                 last = pct;
@@ -314,9 +315,33 @@ mod voice_tests {
         })
         .await
         .unwrap();
-        assert_eq!(std::fs::metadata(&dest).unwrap().len(), KOKORO_ARCHIVE_BYTES);
-        install_archive(&dest, &dir.join("voices")).unwrap();
-        assert!(is_installed(&dir.join("voices")));
+        assert_eq!(std::fs::metadata(&dest).unwrap().len(), KOKORO.archive_bytes);
+        install_archive(&KOKORO, &dest, &dir.join("voices")).unwrap();
+        assert!(is_installed(&dir.join("voices"), &KOKORO));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// Piper (VITS) com o nosso dicionário, de ponta a ponta: instala do pacote e fala com a voz 20.
+/// PIPER_ARCHIVE=/caminho/vits-piper-en_US-libritts_r-medium.tar.bz2 cargo test --release -- --ignored piper_instala
+#[cfg(all(test, feature = "kokoro"))]
+mod piper_tests {
+    use crate::tts::{create_engine, synthesize};
+    use crate::voice::*;
+
+    #[test]
+    #[ignore]
+    fn piper_instala_e_fala() {
+        let archive = std::env::var("PIPER_ARCHIVE").expect("defina PIPER_ARCHIVE");
+        let voices = std::env::temp_dir().join(format!("webtoon-piper-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&voices);
+        std::fs::create_dir_all(&voices).unwrap();
+        install_archive(&PIPER_LIBRITTS, std::path::Path::new(&archive), &voices).unwrap();
+        assert!(is_installed(&voices, &PIPER_LIBRITTS));
+        let tts = create_engine(&PIPER_LIBRITTS, &voices, &super::lexicon()).unwrap();
+        let (samples, rate) = synthesize(&tts, "And what happened to its other arm?", 1.0, 20).unwrap();
+        println!("{} amostras, {rate} Hz, {:.2}s", samples.len(), samples.len() as f32 / rate as f32);
+        assert!(samples.len() as f32 / rate as f32 > 1.0);
+        let _ = std::fs::remove_dir_all(&voices);
     }
 }

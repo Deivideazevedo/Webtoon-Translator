@@ -812,105 +812,157 @@ benchBtn.addEventListener("click", async () => {
   }
 });
 
-// --- Voz (Configurações → Voz): Kokoro opcional, baixado pelo próprio app ---
-const voiceState = document.getElementById("voice_state");
-const voiceProgress = document.getElementById("voice_progress");
-const voiceProgressBar = document.getElementById("voice_progress_bar");
-const voiceDownloadBtn = document.getElementById("voice_download_btn");
-const voiceCancelBtn = document.getElementById("voice_cancel_btn");
+// --- Voz (Configurações → Voz): vozes opcionais, baixadas e escolhidas pelo usuário ---
+const voiceList = document.getElementById("voice_list");
 const voiceTestBtn = document.getElementById("voice_test_btn");
-const voiceRemoveBtn = document.getElementById("voice_remove_btn");
 const voiceStatus = document.getElementById("voice_status");
 const voicePlayer = new Audio();
-let voiceRemoveArmed = false;
-let voiceDownloading = false;
+const voiceUi = { downloadingId: null, removeArmedId: null };
 
 async function refreshVoice() {
-  if (voiceDownloading) return;
   const st = await invoke("voice_status").catch(() => null);
   if (!st) return;
-  voiceState.textContent = st.installed
-    ? `✅ Instalada · ocupa ${formatBytes(st.installed_bytes)}`
-    : `🔇 Não instalada · download de ${formatBytes(st.download_bytes)}`;
-  voiceDownloadBtn.hidden = st.installed;
-  voiceTestBtn.hidden = !st.installed;
-  voiceRemoveBtn.hidden = !st.installed;
-  voiceRemoveArmed = false;
-  voiceRemoveBtn.textContent = "Remover";
+  const busy = voiceUi.downloadingId;
+  voiceList.innerHTML = st.voices
+    .map((v) => {
+      const downloading = busy === v.id;
+      const info = downloading
+        ? `<small id="vs-${v.id}">Conectando…</small><div class="progress"><div id="vp-${v.id}"></div></div>`
+        : `<small>${v.installed ? `✅ instalada · ocupa ${formatBytes(v.installed_bytes)}` : `download de ${formatBytes(v.download_bytes)}`}</small>`;
+      // Tom de voz: só faz sentido escolher numa voz já instalada.
+      const tone = v.installed && !downloading
+        ? `<select class="tone-select" data-id="${v.id}" title="Tom de voz">${v.speakers
+            .map((sp) => `<option value="${sp.sid}" ${sp.sid === v.speaker ? "selected" : ""}>${esc(sp.label)}</option>`)
+            .join("")}</select>`
+        : "";
+      let actions = "";
+      if (downloading) actions = `<button class="secondary" data-act="cancel" type="button">Cancelar</button>`;
+      else if (v.installed)
+        actions = `<button class="secondary" data-act="remove" data-id="${v.id}" type="button">${voiceUi.removeArmedId === v.id ? "Confirmar remoção" : "Remover"}</button>`;
+      else actions = `<button data-act="download" data-id="${v.id}" type="button" ${busy ? "disabled" : ""}>⬇ Baixar</button>`;
+      return `
+        <div class="voice-row">
+          <label class="voice-pick" title="${v.installed ? "Usar esta voz" : "Baixe antes de escolher"}">
+            <input type="radio" name="voice" value="${v.id}" ${v.selected ? "checked" : ""} ${v.installed ? "" : "disabled"}>
+          </label>
+          <div class="voice-info"><b>${esc(v.label)} — ${esc(v.name)}</b>${info}${tone}</div>
+          <div class="voice-actions">${actions}</div>
+        </div>`;
+    })
+    .join("");
+  voiceTestBtn.disabled = !st.voices.some((v) => v.selected && v.installed);
 }
 
 document.querySelector('.tab[data-tab="voice"]').addEventListener("click", refreshVoice);
 
 window.__TAURI__.event.listen("voice-progress", (e) => {
   const p = e.payload;
+  const label = document.getElementById(`vs-${p.id}`);
+  const bar = document.getElementById(`vp-${p.id}`);
+  if (!label || !bar) return;
   if (p.stage === "download") {
     const pct = Math.floor((p.done * 100) / p.total);
-    voiceProgressBar.style.width = `${pct}%`;
-    voiceState.textContent = `Baixando… ${pct}% (${formatBytes(p.done)} de ${formatBytes(p.total)})`;
+    bar.style.width = `${pct}%`;
+    label.textContent = `Baixando… ${pct}% (${formatBytes(p.done)} de ${formatBytes(p.total)})`;
   } else if (p.stage === "install") {
-    voiceProgressBar.style.width = "100%";
-    voiceCancelBtn.hidden = true; // descompactar não dá pra interromper no meio
-    voiceState.textContent = "Instalando… (descompactando, leva ~30s)";
+    bar.style.width = "100%";
+    label.textContent = "Instalando… (descompactando)";
+    const cancel = voiceList.querySelector('[data-act="cancel"]');
+    if (cancel) cancel.hidden = true; // descompactar não dá pra interromper no meio
   }
 });
 
-voiceDownloadBtn.addEventListener("click", async () => {
-  voiceDownloading = true;
-  setStatus(voiceStatus, "", "");
-  voiceDownloadBtn.disabled = true;
-  voiceCancelBtn.hidden = false;
-  voiceProgress.hidden = false;
-  voiceProgressBar.style.width = "0%";
-  voiceState.textContent = "Conectando…";
+voiceList.addEventListener("change", async (e) => {
+  if (e.target.classList.contains("tone-select")) {
+    try {
+      await invoke("select_voice_speaker", { id: e.target.dataset.id, sid: Number(e.target.value) });
+      setStatus(voiceStatus, "Tom de voz escolhido. Use ▶ Ouvir exemplo pra testar.", "ok");
+    } catch (err) {
+      setStatus(voiceStatus, friendlyError(err), "error");
+    }
+    return refreshVoice();
+  }
+  if (e.target.name !== "voice") return;
   try {
-    await invoke("download_voice");
-    setStatus(voiceStatus, "Voz instalada! Os 🔊 do balão já funcionam.", "ok");
+    await invoke("select_voice", { id: e.target.value });
+    setStatus(voiceStatus, "Voz escolhida. Os próximos 🔊 usam ela.", "ok");
   } catch (err) {
-    const msg = friendlyError(err);
-    setStatus(voiceStatus, msg.includes("cancelado") ? "Download cancelado." : msg, msg.includes("cancelado") ? "" : "error");
-  } finally {
-    voiceDownloading = false;
-    voiceDownloadBtn.disabled = false;
-    voiceCancelBtn.hidden = true;
-    voiceProgress.hidden = true;
+    setStatus(voiceStatus, friendlyError(err), "error");
+  }
+  refreshVoice();
+});
+
+voiceList.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (btn.dataset.act === "cancel") return invoke("cancel_voice_download");
+  if (btn.dataset.act === "download") {
+    voiceUi.downloadingId = id;
+    setStatus(voiceStatus, "", "");
+    await refreshVoice();
+    try {
+      await invoke("download_voice", { id });
+      setStatus(voiceStatus, "Voz instalada! Os 🔊 do balão já funcionam.", "ok");
+    } catch (err) {
+      const msg = friendlyError(err);
+      const canceled = msg.includes("cancelado");
+      setStatus(voiceStatus, canceled ? "Download cancelado." : msg, canceled ? "" : "error");
+    } finally {
+      voiceUi.downloadingId = null;
+      refreshVoice();
+    }
+    return;
+  }
+  if (btn.dataset.act === "remove") {
+    // Remover apaga uma voz que leva minutos pra baixar de novo: o primeiro clique só arma.
+    if (voiceUi.removeArmedId !== id) {
+      voiceUi.removeArmedId = id;
+      refreshVoice();
+      setTimeout(() => {
+        if (voiceUi.removeArmedId === id) {
+          voiceUi.removeArmedId = null;
+          refreshVoice();
+        }
+      }, 5000);
+      return;
+    }
+    voiceUi.removeArmedId = null;
+    try {
+      await invoke("remove_voice", { id });
+      setStatus(voiceStatus, "Voz removida.", "");
+    } catch (err) {
+      setStatus(voiceStatus, friendlyError(err), "error");
+    }
     refreshVoice();
   }
 });
 
-voiceCancelBtn.addEventListener("click", () => invoke("cancel_voice_download"));
+const VOICE_TEST_LABEL = "▶ Ouvir exemplo da voz escolhida";
 
 voiceTestBtn.addEventListener("click", async () => {
   voiceTestBtn.disabled = true;
+  // Na primeira vez de cada voz/tom o áudio é gerado na hora (no Kokoro ~2s): mostra o que está
+  // acontecendo em vez de o botão parecer travado.
+  voiceTestBtn.textContent = "⏳ Gerando áudio…";
+  setStatus(voiceStatus, "", "");
   try {
     const url = await invoke("speak_text", { text: "Hi! This is how I'll read your webtoons to you." });
     voicePlayer.src = url;
     voicePlayer.preservesPitch = true;
     voicePlayer.defaultPlaybackRate = voicePlayer.playbackRate = Number(speechSpeedInput.value) || 0.9;
-    await voicePlayer.play();
+    voiceTestBtn.textContent = "🔊 Tocando…";
+    await new Promise((resolve, reject) => {
+      voicePlayer.onended = resolve;
+      voicePlayer.onerror = () => reject(new Error("O áudio gerado não pôde ser reproduzido."));
+      voicePlayer.play().catch(reject);
+    });
   } catch (err) {
     setStatus(voiceStatus, friendlyError(err), "error");
   } finally {
     voiceTestBtn.disabled = false;
+    voiceTestBtn.textContent = VOICE_TEST_LABEL;
   }
-});
-
-// Remover apaga ~335 MB que levam minutos pra baixar de novo: o primeiro clique só arma.
-voiceRemoveBtn.addEventListener("click", async () => {
-  if (!voiceRemoveArmed) {
-    voiceRemoveArmed = true;
-    voiceRemoveBtn.textContent = "Confirmar remoção";
-    setTimeout(() => {
-      if (voiceRemoveArmed) refreshVoice();
-    }, 5000);
-    return;
-  }
-  try {
-    await invoke("remove_voice");
-    setStatus(voiceStatus, "Voz removida.", "");
-  } catch (err) {
-    setStatus(voiceStatus, friendlyError(err), "error");
-  }
-  refreshVoice();
 });
 
 // --- Backup (Configurações → Geral) ---

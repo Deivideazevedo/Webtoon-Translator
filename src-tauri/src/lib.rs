@@ -81,7 +81,8 @@ fn perf_log(app: &tauri::AppHandle, session: &str, event: &str, extra: serde_jso
     }
 }
 
-struct TtsState(std::sync::Mutex<Option<OfflineTts>>);
+/// Motor de voz carregado e de qual voz do catálogo ele é (trocar de voz recarrega).
+struct TtsState(std::sync::Mutex<Option<(&'static str, OfflineTts)>>);
 
 /// Pasta onde o instalador coloca os modelos (voz, OCR, dicionário). Definida no setup a
 /// partir do resource_dir do Tauri; nos testes, a pasta do código-fonte.
@@ -103,8 +104,12 @@ fn tts_models_dir() -> std::path::PathBuf {
 struct TtsCache(std::sync::Mutex<std::collections::VecDeque<(String, String)>>);
 const TTS_CACHE_MAX: usize = 20;
 
-fn tts_cache_key(text: &str, speed: f32) -> String {
-    format!("{speed:.2}|{}", normalize_for_speech(text))
+fn tts_cache_key(voice: &voice::VoicePackage, sid: i32, text: &str, speed: f32) -> String {
+    if voice.id == voice::KOKORO.id && sid == 0 {
+        format!("{speed:.2}|{}", normalize_for_speech(text))
+    } else {
+        format!("{}|{sid}|{speed:.2}|{}", voice.id, normalize_for_speech(text))
+    }
 }
 
 fn tts_cache_get(app: &tauri::AppHandle, key: &str) -> Option<String> {
@@ -133,10 +138,16 @@ fn tts_cache_put(app: &tauri::AppHandle, key: String, url: String) {
 /// ouvido a diferença foi mínima. Bônus: mudar a velocidade não invalida o cache.
 const TTS_SYNTH_SPEED: f32 = 1.0;
 
-fn load_tts_engine(app: &tauri::AppHandle, guard: &mut Option<OfflineTts>, session: &str) -> Result<(), String> {
-    if guard.is_none() {
+fn load_tts_engine(
+    app: &tauri::AppHandle,
+    guard: &mut Option<(&'static str, OfflineTts)>,
+    session: &str,
+) -> Result<(), String> {
+    let voice = selected_voice();
+    if guard.as_ref().map(|(id, _)| *id) != Some(voice.id) {
+        *guard = None; // libera a voz anterior antes de carregar a nova
         let started = std::time::Instant::now();
-        *guard = Some(create_tts()?);
+        *guard = Some((voice.id, create_tts()?));
         perf_log(
             app,
             session,
@@ -167,7 +178,9 @@ fn warm_up_tts(app: &tauri::AppHandle) {
 /// Devolve (data URL, veio_do_cache). O motor é carregado só no primeiro uso (lazy).
 fn synthesize_speech(app: &tauri::AppHandle, text: &str, session: &str) -> Result<(String, bool), String> {
     let speed = TTS_SYNTH_SPEED;
-    let key = tts_cache_key(text, speed);
+    let voice = selected_voice();
+    let sid = speaker_sid(voice);
+    let key = tts_cache_key(voice, sid, text, speed);
     if let Some(url) = tts_cache_get(app, &key) {
         return Ok((url, true));
     }
@@ -187,9 +200,9 @@ fn synthesize_speech(app: &tauri::AppHandle, text: &str, session: &str) -> Resul
         return Ok((url, true));
     }
     load_tts_engine(app, &mut guard, session)?;
-    let tts = guard.as_ref().unwrap();
+    let (_, tts) = guard.as_ref().unwrap();
 
-    let (samples, sample_rate) = webtoon_core::tts::synthesize(tts, text, speed)?;
+    let (samples, sample_rate) = webtoon_core::tts::synthesize(tts, text, speed, sid)?;
     let url = wav_data_url(&samples, sample_rate);
     tts_cache_put(app, key, url.clone());
     if is_favorite_text(app, text) {
@@ -208,8 +221,13 @@ fn favorite_audio_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, Stri
     Ok(dir)
 }
 
+fn favorite_audio_name_for(voice: &voice::VoicePackage, sid: i32, text: &str) -> String {
+    format!("{:016x}.wav", fnv1a64(&tts_cache_key(voice, sid, text, TTS_SYNTH_SPEED)))
+}
+
 fn favorite_audio_name(text: &str) -> String {
-    format!("{:016x}.wav", fnv1a64(&tts_cache_key(text, TTS_SYNTH_SPEED)))
+    let voice = selected_voice();
+    favorite_audio_name_for(voice, speaker_sid(voice), text)
 }
 
 fn read_favorite_audio(app: &tauri::AppHandle, text: &str) -> Option<String> {
@@ -268,7 +286,12 @@ fn gc_favorite_audio(app: &tauri::AppHandle) {
         .unwrap_or_default()
         .iter()
         .flat_map(speech_texts)
-        .map(|t| favorite_audio_name(&t))
+        .flat_map(|t| {
+            voice::VOICES
+                .iter()
+                .flat_map(|v| v.speakers.iter().map(move |sp| (*v, sp.sid)))
+                .map(move |(v, sid)| favorite_audio_name_for(v, sid, &t))
+        })
         .collect();
     for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -358,24 +381,44 @@ fn create_ocr_engine() -> Result<OcrEngine, String> {
 }
 
 fn create_tts() -> Result<OfflineTts, String> {
-    webtoon_core::tts::create_kokoro(&voice::kokoro_dir(&voices_dir()), &lexicon_path())
+    webtoon_core::tts::create_engine(selected_voice(), &voices_dir(), &lexicon_path())
 }
 
-// --- Voz Kokoro opcional: baixada pelo usuário em Configurações → Voz ---
+// --- Vozes opcionais: baixadas e escolhidas pelo usuário em Configurações → Voz ---
 
-/// Pasta da voz baixada (dados do app, fora do pacote): definida no setup.
+/// Pasta das vozes baixadas (dados do app, fora do pacote): definida no setup.
 static VOICES_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 
 fn voices_dir() -> std::path::PathBuf {
     VOICES_DIR.get().cloned().unwrap_or_default()
 }
 
+/// Voz escolhida (id do catálogo). Fica em memória pra não ler o settings.json a cada áudio.
+static SELECTED_VOICE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+fn selected_voice() -> &'static voice::VoicePackage {
+    let id = SELECTED_VOICE.lock().map(|v| v.clone()).unwrap_or_default();
+    voice::find(&id).unwrap_or(&voice::KOKORO)
+}
+
+/// Tom escolhido em cada motor (id da voz → sid). Sem escolha = o tom padrão do modelo.
+static SELECTED_SPEAKERS: std::sync::Mutex<Option<std::collections::HashMap<String, i32>>> =
+    std::sync::Mutex::new(None);
+
+fn speaker_sid(voice: &voice::VoicePackage) -> i32 {
+    let chosen = SELECTED_SPEAKERS
+        .lock()
+        .ok()
+        .and_then(|m| m.as_ref().and_then(|m| m.get(voice.id).copied()));
+    voice.speaker_or_default(chosen)
+}
+
 fn voice_installed() -> bool {
-    voice::is_installed(&voices_dir())
+    voice::is_installed(&voices_dir(), selected_voice())
 }
 
 /// Prefixo que o balão reconhece pra mostrar "baixe a voz" em vez de um erro genérico.
-const VOICE_MISSING: &str = "VOZ_NAO_INSTALADA: baixe a voz em Configurações → Voz.";
+const VOICE_MISSING: &str = "VOZ_NAO_INSTALADA: baixe uma voz em Configurações → Voz.";
 
 struct VoiceDownload {
     running: std::sync::atomic::AtomicBool,
@@ -384,50 +427,109 @@ struct VoiceDownload {
 
 #[tauri::command]
 fn voice_status() -> serde_json::Value {
-    serde_json::json!({
-        "installed": voice_installed(),
-        "installed_bytes": voice::installed_bytes(&voices_dir()),
-        "download_bytes": voice::KOKORO_ARCHIVE_BYTES,
-    })
+    let dir = voices_dir();
+    let selected = selected_voice().id;
+    let voices: Vec<serde_json::Value> = voice::VOICES
+        .iter()
+        .map(|v| {
+            serde_json::json!({
+                "id": v.id,
+                "name": v.name,
+                "label": v.label,
+                "download_bytes": v.archive_bytes,
+                "installed": voice::is_installed(&dir, v),
+                "installed_bytes": voice::installed_bytes(&dir, v),
+                "selected": v.id == selected,
+                "speakers": v.speakers,
+                "speaker": speaker_sid(v),
+            })
+        })
+        .collect();
+    serde_json::json!({ "voices": voices })
 }
 
-/// Baixa (com progresso no evento "voice-progress"), confere o SHA-256 e instala a voz.
+fn set_selected_voice(app: &tauri::AppHandle, id: &str) -> Result<(), String> {
+    *SELECTED_VOICE.lock().map_err(|_| "estado da voz corrompido")? = id.to_string();
+    let mut settings = load_settings(app.clone())?;
+    settings.voice = id.to_string();
+    save_settings(app.clone(), settings)
+}
+
+/// Escolhe o tom de voz (sid) de um motor. Não precisa recarregar nada: é o mesmo modelo.
 #[tauri::command]
-async fn download_voice(app: tauri::AppHandle) -> Result<(), String> {
+fn select_voice_speaker(app: tauri::AppHandle, id: String, sid: i32) -> Result<(), String> {
+    let voice = voice::find(&id).ok_or("voz desconhecida")?;
+    if voice.speaker_or_default(Some(sid)) != sid {
+        return Err("Tom de voz desconhecido.".to_string());
+    }
+    let mut settings = load_settings(app.clone())?;
+    settings.voice_speakers.insert(voice.id.to_string(), sid);
+    if let Ok(mut speakers) = SELECTED_SPEAKERS.lock() {
+        *speakers = Some(settings.voice_speakers.clone());
+    }
+    save_settings(app, settings)
+}
+
+/// Escolhe a voz usada pelos 🔊. A anterior sai da memória agora; a nova carrega no próximo áudio.
+#[tauri::command]
+fn select_voice(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let voice = voice::find(&id).ok_or("voz desconhecida")?;
+    if !voice::is_installed(&voices_dir(), voice) {
+        return Err(format!("Baixe a voz {} antes de escolher.", voice.name));
+    }
+    if let Ok(mut guard) = app.state::<TtsState>().0.lock() {
+        *guard = None;
+    }
+    set_selected_voice(&app, voice.id)
+}
+
+/// Baixa (com progresso no evento "voice-progress"), confere o SHA-256 e instala a voz `id`.
+/// Se a voz escolhida ainda não estiver instalada, a recém-baixada passa a ser a escolhida.
+#[tauri::command]
+async fn download_voice(app: tauri::AppHandle, id: String) -> Result<(), String> {
     use std::sync::atomic::Ordering;
+    let voice = voice::find(&id).ok_or("voz desconhecida")?;
     let state = app.state::<VoiceDownload>();
     if state.running.swap(true, Ordering::SeqCst) {
-        return Err("O download da voz já está em andamento.".to_string());
+        return Err("Já tem um download de voz em andamento.".to_string());
     }
     state.cancel.store(false, Ordering::SeqCst);
 
     let result = async {
         let dir = voices_dir();
         fs::create_dir_all(&dir).map_err(|e| format!("Não consegui criar a pasta da voz: {e}"))?;
-        let archive = dir.join("kokoro.tar.bz2");
+        let archive = dir.join(format!("{}.tar.bz2", voice.id));
         let mut last_pct = u64::MAX;
-        voice::download_archive(&archive, &state.cancel, |done, total| {
+        voice::download_archive(voice, &archive, &state.cancel, |done, total| {
             let pct = done * 100 / total.max(1);
             if pct != last_pct {
                 last_pct = pct;
-                let _ = app.emit("voice-progress", serde_json::json!({"stage": "download", "done": done, "total": total}));
+                let _ = app.emit(
+                    "voice-progress",
+                    serde_json::json!({"id": voice.id, "stage": "download", "done": done, "total": total}),
+                );
             }
         })
         .await?;
-        let _ = app.emit("voice-progress", serde_json::json!({"stage": "install"}));
+        let _ = app.emit("voice-progress", serde_json::json!({"id": voice.id, "stage": "install"}));
         let installed = tauri::async_runtime::spawn_blocking({
             let (archive, dir) = (archive.clone(), dir.clone());
-            move || voice::install_archive(&archive, &dir)
+            move || voice::install_archive(voice, &archive, &dir)
         })
         .await
         .map_err(|e| e.to_string())?;
         let _ = fs::remove_file(&archive);
-        installed
+        installed?;
+        if !voice_installed() {
+            set_selected_voice(&app, voice.id)?;
+        }
+        Ok(())
     }
     .await;
 
     state.running.store(false, Ordering::SeqCst);
-    let _ = app.emit("voice-progress", serde_json::json!({"stage": if result.is_ok() { "done" } else { "error" }}));
+    let stage = if result.is_ok() { "done" } else { "error" };
+    let _ = app.emit("voice-progress", serde_json::json!({"id": voice.id, "stage": stage}));
     result
 }
 
@@ -438,11 +540,14 @@ fn cancel_voice_download(app: tauri::AppHandle) {
 
 /// Descarrega o motor da memória antes de apagar (no Windows não dá pra apagar arquivo em uso).
 #[tauri::command]
-fn remove_voice(app: tauri::AppHandle) -> Result<(), String> {
+fn remove_voice(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let voice = voice::find(&id).ok_or("voz desconhecida")?;
     if let Ok(mut guard) = app.state::<TtsState>().0.lock() {
-        *guard = None;
+        if guard.as_ref().map(|(loaded, _)| *loaded) == Some(voice.id) {
+            *guard = None;
+        }
     }
-    voice::remove(&voices_dir())
+    voice::remove(&voices_dir(), voice)
 }
 
 fn run_ocr(app: &tauri::AppHandle, image: &image::RgbaImage) -> Result<String, String> {
@@ -484,6 +589,12 @@ struct Settings {
     /// Opacidade do fundo do balão (0.3–1.0): translúcido pra não esconder a arte do webtoon.
     #[serde(default = "default_bubble_opacity")]
     bubble_opacity: f32,
+    /// Voz do catálogo usada nos 🔊 (core::voice::VOICES).
+    #[serde(default = "default_voice")]
+    voice: String,
+    /// Tom escolhido em cada voz (id da voz → sid).
+    #[serde(default)]
+    voice_speakers: std::collections::HashMap<String, i32>,
 }
 
 impl Settings {
@@ -516,6 +627,10 @@ fn default_bubble_opacity() -> f32 {
     0.85
 }
 
+fn default_voice() -> String {
+    voice::KOKORO.id.to_string()
+}
+
 /// Instalação nova começa no Google AI Studio: é o único provedor com plano gratuito,
 /// então quem baixa o app só precisa criar uma chave pra começar.
 fn default_provider() -> String {
@@ -539,6 +654,8 @@ impl Default for Settings {
             shortcut: default_shortcut(),
             speech_speed: default_speech_speed(),
             bubble_opacity: default_bubble_opacity(),
+            voice: default_voice(),
+            voice_speakers: std::collections::HashMap::new(),
             provider: default_provider(),
             anthropic_base_url: default_anthropic_base_url(),
             anthropic_model: String::new(),
@@ -1099,6 +1216,12 @@ fn import_data(app: tauri::AppHandle, json: String) -> Result<String, String> {
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.set_always_on_top(imported.always_on_top);
         }
+        if let Ok(mut selected) = SELECTED_VOICE.lock() {
+            *selected = imported.voice.clone();
+        }
+        if let Ok(mut speakers) = SELECTED_SPEAKERS.lock() {
+            *speakers = Some(imported.voice_speakers.clone());
+        }
         save_settings(app.clone(), imported)?;
         summary.push("configurações".to_string());
     }
@@ -1438,6 +1561,8 @@ pub fn run() {
             download_voice,
             cancel_voice_download,
             remove_voice,
+            select_voice,
+            select_voice_speaker,
         ])
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -1455,6 +1580,14 @@ pub fn run() {
             }
             if let Ok(dir) = app.path().app_local_data_dir() {
                 let _ = VOICES_DIR.set(dir.join("voices"));
+            }
+            if let Ok(settings) = load_settings(app.handle().clone()) {
+                if let Ok(mut speakers) = SELECTED_SPEAKERS.lock() {
+                    *speakers = Some(settings.voice_speakers.clone());
+                }
+                if let Ok(mut selected) = SELECTED_VOICE.lock() {
+                    *selected = settings.voice;
+                }
             }
             let handle = app.handle().clone();
             if let Ok(settings) = load_settings(handle.clone()) {

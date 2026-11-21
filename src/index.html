@@ -117,16 +117,12 @@
 
     <div id="tab-voice" class="tab-panel" style="display: none;">
       <div class="card">
-        <label>Voz em inglês (Kokoro)</label>
-        <p class="hint">Voz neural que roda no seu computador, sem internet depois de instalada. É opcional: sem ela
-          o app traduz normalmente, só não fala. Download de ~305 MB (ocupa ~335 MB).</p>
-        <div id="voice_state" class="voice-state"></div>
-        <div id="voice_progress" class="progress" hidden><div id="voice_progress_bar"></div></div>
-        <div class="row">
-          <button id="voice_download_btn" type="button">⬇ Baixar voz</button>
-          <button id="voice_cancel_btn" class="secondary" type="button" hidden>Cancelar</button>
-          <button id="voice_test_btn" class="secondary" type="button" hidden>▶ Ouvir exemplo</button>
-          <button id="voice_remove_btn" class="secondary" type="button" hidden>Remover</button>
+        <label>Voz em inglês</label>
+        <p class="hint">Vozes que rodam no seu computador, sem internet depois de instaladas. São opcionais: sem nenhuma
+          o app traduz normalmente, só não fala. Dá pra ter as duas e escolher qual usar (◉).</p>
+        <div id="voice_list"></div>
+        <div class="row" style="margin-top:12px;">
+          <button id="voice_test_btn" class="secondary" type="button">▶ Ouvir exemplo da voz escolhida</button>
         </div>
         <div id="voice_status" class="status"></div>
       </div>

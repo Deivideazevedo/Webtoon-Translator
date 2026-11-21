@@ -9,6 +9,13 @@ O Webtoon Translator inclui os modelos e dados abaixo. Cada um continua sob a pr
   sherpa-onnx quando o usuário escolhe "Baixar voz" (Configurações → Voz).
 - Licença: Apache License 2.0 — o texto completo vem junto com a voz baixada (`voices/kokoro-en-v0_19/LICENSE`).
 
+## Voz: Piper libritts_r medium (opcional, baixada pelo app)
+
+- Origem: modelo Piper (https://github.com/rhasspy/piper) convertido pelo sherpa-onnx
+  (`vits-piper-en_US-libritts_r-medium`). Não vem no instalador: o app baixa quando o usuário escolhe.
+- Dados de treino: LibriTTS-R (http://www.openslr.org/141/), licença CC BY 4.0. Segundo o cartão do modelo
+  (`MODEL_CARD`, baixado junto), foi ajustado a partir da voz Piper "lessac medium".
+
 ## Motor de voz: sherpa-onnx
 
 - Origem: https://github.com/k2-fsa/sherpa-onnx
