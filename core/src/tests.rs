@@ -411,3 +411,84 @@ mod library_tests {
         let _ = std::fs::remove_dir_all(d2);
     }
 }
+
+mod full_screen_tests {
+    use crate::ocr::{group_blocks, OcrLine};
+    use crate::translate::parse_block_translations;
+
+    fn line(text: &str, left: i32, top: i32, right: i32) -> OcrLine {
+        OcrLine { text: text.into(), left, top, right, bottom: top + 30 }
+    }
+
+    /// Duas linhas coladas e centralizadas viram um balão; uma linha longe vira outro.
+    #[test]
+    fn agrupa_linhas_do_mesmo_balao() {
+        let lines = vec![
+            line("IN THE PAST,", 300, 100, 600),
+            line("I SELECTED TWELVE KNIGHTS", 200, 135, 700),
+            line("AND TALENT...", 320, 170, 580),
+            line("THE BLOOD LIONS", 250, 600, 650),
+        ];
+        let blocks = group_blocks(&lines);
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].text, "IN THE PAST, I SELECTED TWELVE KNIGHTS AND TALENT...");
+        assert_eq!((blocks[0].left, blocks[0].top, blocks[0].right, blocks[0].bottom), (200, 100, 700, 200));
+        assert_eq!(blocks[1].text, "THE BLOOD LIONS");
+    }
+
+    /// O OCR às vezes lê uma palavra duas vezes (solta e dentro da linha): a cópia é descartada.
+    #[test]
+    fn descarta_leitura_duplicada() {
+        let lines = vec![
+            // Medidas reais de um print (linha de 59 px).
+            OcrLine { text: "AND THE DIVINE ARCHER".into(), left: 290, top: 1395, right: 974, bottom: 1454 },
+            OcrLine { text: "\"DIVINE".into(), left: 533, top: 1396, right: 724, bottom: 1451 },
+            OcrLine { text: "WHO NEVER MISSED".into(), left: 243, top: 1457, right: 1020, bottom: 1523 },
+        ];
+        let blocks = group_blocks(&lines);
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].text, "AND THE DIVINE ARCHER WHO NEVER MISSED");
+    }
+
+    /// Palavra partida no fim da linha volta a ficar inteira.
+    #[test]
+    fn junta_palavra_hifenizada() {
+        let lines = vec![line("NEAR-SUPERHUMAN HORSE-", 100, 100, 700), line("MANSHIP LET HIM", 120, 135, 680)];
+        assert_eq!(group_blocks(&lines)[0].text, "NEAR-SUPERHUMAN HORSE-MANSHIP LET HIM");
+    }
+
+    /// Balões lado a lado (mesma altura, sem sobreposição) não se misturam.
+    #[test]
+    fn baloes_lado_a_lado_ficam_separados() {
+        let lines = vec![line("HELLO", 0, 100, 200), line("WORLD", 600, 100, 800)];
+        assert_eq!(group_blocks(&lines).len(), 2);
+    }
+
+    /// Print real de webtoon (tela inteira do celular): mostra os balões encontrados.
+    /// OCR_PAGE_IMAGE=/caminho/print.jpg cargo test --release --lib -- --ignored --nocapture balloons_in_real
+    #[test]
+    #[ignore]
+    fn balloons_in_real_page() {
+        let engine = crate::ocr::load_engine(&super::models_root().join("ocr-models")).unwrap();
+        let img = image::open(std::env::var("OCR_PAGE_IMAGE").expect("defina OCR_PAGE_IMAGE")).unwrap().into_rgb8();
+        let started = std::time::Instant::now();
+        let lines = crate::ocr::recognize_lines(&engine, img.as_raw(), img.width(), img.height()).unwrap();
+        for l in &lines {
+            println!("  linha [{},{} {}x{}] {}", l.left, l.top, l.right - l.left, l.bottom - l.top, l.text);
+        }
+        println!("parágrafos: {:?}", crate::ocr::recognize_paragraphs(&engine, img.as_raw(), img.width(), img.height()).unwrap());
+        let blocks = group_blocks(&lines);
+        println!("{} linhas → {} blocos em {:.2}s", lines.len(), blocks.len(), started.elapsed().as_secs_f32());
+        for b in &blocks {
+            println!("[{},{} {}x{}] {}", b.left, b.top, b.right - b.left, b.bottom - b.top, b.text);
+        }
+        assert!(!blocks.is_empty());
+    }
+
+    #[test]
+    fn le_traducoes_em_lote_e_acerta_o_tamanho() {
+        let raw = "```json\n{\"translations\": [\"Olá\", \"Mundo\", \"extra\"]}\n```";
+        assert_eq!(parse_block_translations(raw, 2), vec!["Olá", "Mundo"]);
+        assert_eq!(parse_block_translations("lixo", 2), vec!["", ""]);
+    }
+}

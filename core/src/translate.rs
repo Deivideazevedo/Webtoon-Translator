@@ -358,10 +358,63 @@ pub async fn stream_translation(
     model: &str,
     on_event: &mut (dyn FnMut(StreamEvent) + Send),
 ) -> Result<(String, Option<u64>), String> {
-    let base = base_url.trim_end_matches('/');
     let user_message = format!(
         "Texto extraído por OCR de uma captura de tela de webtoon:\n\n{extracted_text}"
     );
+    stream_chat(wire, SYSTEM_PROMPT, &user_message, api_key, base_url, model, on_event).await
+}
+
+/// Prompt curto do modo tela cheia: só a tradução de cada balão, sem a parte didática (que vem
+/// depois, quando o usuário toca num balão).
+pub const BATCH_PROMPT: &str = "Você traduz balões de webtoon do inglês para o português brasileiro. Você recebe \
+uma lista numerada de textos extraídos por OCR (podem ter ruído: letras soltas, palavras levemente erradas). \
+Responda SOMENTE com JSON válido, sem markdown: {\"translations\": [\"...\", \"...\"]}, com exatamente uma \
+tradução por item, na mesma ordem. Português natural e coloquial, preservando gíria, intensidade e tom; sentence \
+case (nunca copie a caixa alta do quadrinho). Se um item não for inglês legível (ruído, números, nome de site), \
+devolva \"\" pra ele.";
+
+/// Traduz vários balões numa chamada só (modo tela cheia). Sempre devolve uma tradução por texto,
+/// na mesma ordem ("" quando o modelo não traduziu aquele).
+pub async fn translate_blocks(
+    wire: Wire,
+    texts: &[String],
+    api_key: &str,
+    base_url: &str,
+    model: &str,
+) -> Result<Vec<String>, String> {
+    if texts.is_empty() {
+        return Ok(Vec::new());
+    }
+    let numbered: String = texts.iter().enumerate().map(|(i, t)| format!("{}. {}\n", i + 1, t.replace('\n', " "))).collect();
+    let user_message = format!("Balões extraídos por OCR de uma captura de tela de webtoon:\n\n{numbered}");
+    let (raw, _) = stream_chat(wire, BATCH_PROMPT, &user_message, api_key, base_url, model, &mut |_| {}).await?;
+    Ok(parse_block_translations(&raw, texts.len()))
+}
+
+/// Lê `{"translations": [...]}` (tolerando markdown em volta) e acerta o tamanho da lista.
+pub fn parse_block_translations(raw: &str, expected: usize) -> Vec<String> {
+    let json = raw.find('{').and_then(|a| raw.rfind('}').map(|b| &raw[a..=b])).unwrap_or(raw);
+    let mut out: Vec<String> = serde_json::from_str::<serde_json::Value>(json)
+        .ok()
+        .and_then(|v| v["translations"].as_array().cloned())
+        .map(|items| items.iter().map(|t| t.as_str().unwrap_or_default().trim().to_string()).collect())
+        .unwrap_or_default();
+    out.resize(expected, String::new());
+    out
+}
+
+/// Uma conversa (prompt de sistema + mensagem) com streaming nos 3 provedores. Os eventos de
+/// campo fechado só fazem sentido pro JSON da tradução didática ([STREAMED_FIELDS]).
+pub async fn stream_chat(
+    wire: Wire,
+    system_prompt: &str,
+    user_message: &str,
+    api_key: &str,
+    base_url: &str,
+    model: &str,
+    on_event: &mut (dyn FnMut(StreamEvent) + Send),
+) -> Result<(String, Option<u64>), String> {
+    let base = base_url.trim_end_matches('/');
     let (url, request) = match wire {
         Wire::OpenAi => {
             let url = format!("{base}/v1/chat/completions");
@@ -371,7 +424,7 @@ pub async fn stream_translation(
                 "stream": true,
                 "stream_options": {"include_usage": true},
                 "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
                 ]
             }));
@@ -387,7 +440,7 @@ pub async fn stream_translation(
                     "model": model,
                     "max_tokens": MAX_OUTPUT_TOKENS,
                     "stream": true,
-                    "system": SYSTEM_PROMPT,
+                    "system": system_prompt,
                     "messages": [{"role": "user", "content": user_message}]
                 }));
             (url, req)
@@ -395,7 +448,7 @@ pub async fn stream_translation(
         Wire::Google => {
             let url = format!("{base}/v1beta/models/{model}:streamGenerateContent?alt=sse");
             let req = http().post(&url).header("x-goog-api-key", api_key).json(&serde_json::json!({
-                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                "system_instruction": {"parts": [{"text": system_prompt}]},
                 "contents": [{"role": "user", "parts": [{"text": user_message}]}],
                 "generationConfig": {"maxOutputTokens": MAX_OUTPUT_TOKENS}
             }));

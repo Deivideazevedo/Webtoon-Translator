@@ -593,7 +593,8 @@ fn run_ocr(app: &tauri::AppHandle, image: &image::RgbaImage) -> Result<String, S
     let engine = guard.as_ref().unwrap();
 
     let rgb = image::DynamicImage::ImageRgba8(image.clone()).into_rgb8();
-    webtoon_core::ocr::recognize_text(engine, rgb.as_raw(), rgb.width(), rgb.height())
+    // Linhas do mesmo balão juntas num parágrafo (o modelo traduz a frase, não linha a linha).
+    webtoon_core::ocr::recognize_paragraphs(engine, rgb.as_raw(), rgb.width(), rgb.height())
 }
 
 const DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+T";
