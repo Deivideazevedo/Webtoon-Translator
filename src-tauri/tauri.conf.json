@@ -40,7 +40,7 @@
       }
     },
     "resources": {
-      "tts-models/": "tts-models/",
+      "tts-models/lexicon-en-us.txt": "tts-models/lexicon-en-us.txt",
       "ocr-models/": "ocr-models/",
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },

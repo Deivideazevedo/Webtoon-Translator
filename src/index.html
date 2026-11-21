@@ -43,6 +43,7 @@
     <div class="tabs">
       <button class="tab active" data-tab="connection" type="button">Conexão</button>
       <button class="tab" data-tab="shortcuts" type="button">Atalhos</button>
+      <button class="tab" data-tab="voice" type="button">Voz</button>
       <button class="tab" data-tab="general" type="button">Geral</button>
     </div>
 
@@ -114,17 +115,34 @@
       </div>
     </div>
 
+    <div id="tab-voice" class="tab-panel" style="display: none;">
+      <div class="card">
+        <label>Voz em inglês (Kokoro)</label>
+        <p class="hint">Voz neural que roda no seu computador, sem internet depois de instalada. É opcional: sem ela
+          o app traduz normalmente, só não fala. Download de ~305 MB (ocupa ~335 MB).</p>
+        <div id="voice_state" class="voice-state"></div>
+        <div id="voice_progress" class="progress" hidden><div id="voice_progress_bar"></div></div>
+        <div class="row">
+          <button id="voice_download_btn" type="button">⬇ Baixar voz</button>
+          <button id="voice_cancel_btn" class="secondary" type="button" hidden>Cancelar</button>
+          <button id="voice_test_btn" class="secondary" type="button" hidden>▶ Ouvir exemplo</button>
+          <button id="voice_remove_btn" class="secondary" type="button" hidden>Remover</button>
+        </div>
+        <div id="voice_status" class="status"></div>
+      </div>
+
+      <div class="card">
+        <label for="speech_speed">Velocidade da voz (<span id="speech_speed_value">0.9x</span>)</label>
+        <input id="speech_speed" type="range" min="0.5" max="1.5" step="0.05" value="0.9">
+      </div>
+    </div>
+
     <div id="tab-general" class="tab-panel" style="display: none;">
       <div class="card">
         <label style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:14px; color:var(--text); white-space:nowrap;">
           <input id="always_on_top" type="checkbox" style="width:auto; margin:0;">
           Manter sempre visível (por cima)
         </label>
-      </div>
-
-      <div class="card">
-        <label for="speech_speed">Velocidade da voz (<span id="speech_speed_value">0.9x</span>)</label>
-        <input id="speech_speed" type="range" min="0.5" max="1.5" step="0.05" value="0.9">
       </div>
 
       <div class="card">

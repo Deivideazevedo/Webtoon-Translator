@@ -251,3 +251,72 @@ mod backup_tests {
         assert_eq!(merged[0].translation, "local");
     }
 }
+
+#[cfg(test)]
+mod voice_tests {
+    use crate::voice::*;
+    use std::sync::atomic::AtomicBool;
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("webtoon-voice-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// KOKORO_ARCHIVE=/caminho/kokoro-en-v0_19.tar.bz2 cargo test --release -- --ignored instala_do_pacote
+    #[test]
+    #[ignore]
+    fn instala_do_pacote_so_os_arquivos_necessarios() {
+        let archive = std::env::var("KOKORO_ARCHIVE").expect("defina KOKORO_ARCHIVE");
+        let voices = temp_dir("install");
+        assert!(!is_installed(&voices));
+        install_archive(std::path::Path::new(&archive), &voices).unwrap();
+        assert!(is_installed(&voices));
+        let mut names: Vec<String> = std::fs::read_dir(kokoro_dir(&voices))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["LICENSE", "README.md", "model.onnx", "tokens.txt", "voices.bin"]);
+        println!("instalada: {} MB", installed_bytes(&voices) / 1_048_576);
+        remove(&voices).unwrap();
+        assert!(!is_installed(&voices));
+        let _ = std::fs::remove_dir_all(&voices);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn cancelar_nao_deixa_lixo() {
+        let dir = temp_dir("cancel");
+        let dest = dir.join("kokoro.tar.bz2");
+        let cancel = AtomicBool::new(true);
+        let err = download_archive(&dest, &cancel, |_, _| {}).await.unwrap_err();
+        assert!(err.contains("cancelado"), "{err}");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Baixa os ~305MB de verdade e confere o SHA-256: cargo test --release -- --ignored download_real
+    #[tokio::test]
+    #[ignore]
+    async fn download_real_confere_o_hash() {
+        let dir = temp_dir("download");
+        let dest = dir.join("kokoro.tar.bz2");
+        let cancel = AtomicBool::new(false);
+        let mut last = 0;
+        download_archive(&dest, &cancel, |done, total| {
+            let pct = done * 100 / total;
+            if pct >= last + 25 {
+                last = pct;
+                println!("{pct}% ({} MB)", done / 1_048_576);
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(std::fs::metadata(&dest).unwrap().len(), KOKORO_ARCHIVE_BYTES);
+        install_archive(&dest, &dir.join("voices")).unwrap();
+        assert!(is_installed(&dir.join("voices")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

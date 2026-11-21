@@ -6,6 +6,7 @@ pub mod ocr;
 pub mod pronunciation;
 pub mod text;
 pub mod translate;
+pub mod voice;
 #[cfg(feature = "kokoro")]
 pub mod tts;
 

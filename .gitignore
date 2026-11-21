@@ -1,7 +1,5 @@
 /src-tauri/target/
 /src-tauri/gen/schemas/
 
-# Modelo de voz (336MB). Pra restaurar:
-#   curl -L https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2 \
-#     | tar xj -C src-tauri/tts-models
+# Voz Kokoro de desenvolvimento (scripts/fetch-models.sh). No app ela é baixada pela aba Voz.
 /src-tauri/tts-models/kokoro-en-v0_19/

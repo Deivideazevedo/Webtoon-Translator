@@ -590,6 +590,8 @@ async function openSettings() {
   setStatus(saveStatus, "", "");
   setStatus(speedStatus, "", "");
   setStatus(benchStatus, "", "");
+  setStatus(voiceStatus, "", "");
+  refreshVoice();
   benchResults.innerHTML = "";
   providerDetails.open = false; // acordeão recolhido por padrão, pra ganhar espaço
 
@@ -787,6 +789,107 @@ benchBtn.addEventListener("click", async () => {
     benchBtn.disabled = false;
     benchBtn.textContent = BENCH_LABEL;
   }
+});
+
+// --- Voz (Configurações → Voz): Kokoro opcional, baixado pelo próprio app ---
+const voiceState = document.getElementById("voice_state");
+const voiceProgress = document.getElementById("voice_progress");
+const voiceProgressBar = document.getElementById("voice_progress_bar");
+const voiceDownloadBtn = document.getElementById("voice_download_btn");
+const voiceCancelBtn = document.getElementById("voice_cancel_btn");
+const voiceTestBtn = document.getElementById("voice_test_btn");
+const voiceRemoveBtn = document.getElementById("voice_remove_btn");
+const voiceStatus = document.getElementById("voice_status");
+const voicePlayer = new Audio();
+let voiceRemoveArmed = false;
+let voiceDownloading = false;
+
+async function refreshVoice() {
+  if (voiceDownloading) return;
+  const st = await invoke("voice_status").catch(() => null);
+  if (!st) return;
+  voiceState.textContent = st.installed
+    ? `✅ Instalada · ocupa ${formatBytes(st.installed_bytes)}`
+    : `🔇 Não instalada · download de ${formatBytes(st.download_bytes)}`;
+  voiceDownloadBtn.hidden = st.installed;
+  voiceTestBtn.hidden = !st.installed;
+  voiceRemoveBtn.hidden = !st.installed;
+  voiceRemoveArmed = false;
+  voiceRemoveBtn.textContent = "Remover";
+}
+
+document.querySelector('.tab[data-tab="voice"]').addEventListener("click", refreshVoice);
+
+window.__TAURI__.event.listen("voice-progress", (e) => {
+  const p = e.payload;
+  if (p.stage === "download") {
+    const pct = Math.floor((p.done * 100) / p.total);
+    voiceProgressBar.style.width = `${pct}%`;
+    voiceState.textContent = `Baixando… ${pct}% (${formatBytes(p.done)} de ${formatBytes(p.total)})`;
+  } else if (p.stage === "install") {
+    voiceProgressBar.style.width = "100%";
+    voiceCancelBtn.hidden = true; // descompactar não dá pra interromper no meio
+    voiceState.textContent = "Instalando… (descompactando, leva ~30s)";
+  }
+});
+
+voiceDownloadBtn.addEventListener("click", async () => {
+  voiceDownloading = true;
+  setStatus(voiceStatus, "", "");
+  voiceDownloadBtn.disabled = true;
+  voiceCancelBtn.hidden = false;
+  voiceProgress.hidden = false;
+  voiceProgressBar.style.width = "0%";
+  voiceState.textContent = "Conectando…";
+  try {
+    await invoke("download_voice");
+    setStatus(voiceStatus, "Voz instalada! Os 🔊 do balão já funcionam.", "ok");
+  } catch (err) {
+    const msg = friendlyError(err);
+    setStatus(voiceStatus, msg.includes("cancelado") ? "Download cancelado." : msg, msg.includes("cancelado") ? "" : "error");
+  } finally {
+    voiceDownloading = false;
+    voiceDownloadBtn.disabled = false;
+    voiceCancelBtn.hidden = true;
+    voiceProgress.hidden = true;
+    refreshVoice();
+  }
+});
+
+voiceCancelBtn.addEventListener("click", () => invoke("cancel_voice_download"));
+
+voiceTestBtn.addEventListener("click", async () => {
+  voiceTestBtn.disabled = true;
+  try {
+    const url = await invoke("speak_text", { text: "Hi! This is how I'll read your webtoons to you." });
+    voicePlayer.src = url;
+    voicePlayer.preservesPitch = true;
+    voicePlayer.defaultPlaybackRate = voicePlayer.playbackRate = Number(speechSpeedInput.value) || 0.9;
+    await voicePlayer.play();
+  } catch (err) {
+    setStatus(voiceStatus, friendlyError(err), "error");
+  } finally {
+    voiceTestBtn.disabled = false;
+  }
+});
+
+// Remover apaga ~335 MB que levam minutos pra baixar de novo: o primeiro clique só arma.
+voiceRemoveBtn.addEventListener("click", async () => {
+  if (!voiceRemoveArmed) {
+    voiceRemoveArmed = true;
+    voiceRemoveBtn.textContent = "Confirmar remoção";
+    setTimeout(() => {
+      if (voiceRemoveArmed) refreshVoice();
+    }, 5000);
+    return;
+  }
+  try {
+    await invoke("remove_voice");
+    setStatus(voiceStatus, "Voz removida.", "");
+  } catch (err) {
+    setStatus(voiceStatus, friendlyError(err), "error");
+  }
+  refreshVoice();
 });
 
 // --- Backup (Configurações → Geral) ---

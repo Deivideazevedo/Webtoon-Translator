@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Baixa o modelo de voz (Kokoro, ~336MB), que não fica no git por ser grande demais.
-# Os modelos de OCR e o dicionário de pronúncia já vêm no repositório.
+# Só pra desenvolvimento (testes de voz e scripts de comparação): o app em si baixa a voz pela
+# aba Configurações → Voz. Coloca o Kokoro em src-tauri/tts-models/, fora do pacote e do git.
 set -euo pipefail
 
 DEST="$(cd "$(dirname "$0")/.." && pwd)/src-tauri/tts-models"

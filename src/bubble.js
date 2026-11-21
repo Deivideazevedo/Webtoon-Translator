@@ -238,6 +238,13 @@ async function speak(btn) {
       player.play().catch(reject);
     });
   } catch (err) {
+    if (String(err).includes("VOZ_NAO_INSTALADA")) {
+      // Voz é opcional: em vez de erro, diz onde baixar (no rodapé, por alguns segundos).
+      const before = meta.textContent;
+      meta.textContent = "🔇 Voz não instalada — baixe em Configurações → Voz";
+      setTimeout(() => (meta.textContent = before), 5000);
+      return;
+    }
     console.error("Falha ao gerar fala:", err);
     btn.title = String(err);
     btn.textContent = "⚠";

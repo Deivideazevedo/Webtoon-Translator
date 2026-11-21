@@ -2502,13 +2502,16 @@ name = "webtoon-core"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "bzip2 0.6.1",
  "image",
  "ocrs",
  "reqwest",
  "rten",
  "serde",
  "serde_json",
+ "sha2",
  "sherpa-onnx",
+ "tar",
  "tokio",
 ]
 

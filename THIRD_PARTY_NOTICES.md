@@ -2,11 +2,12 @@
 
 O Webtoon Translator inclui os modelos e dados abaixo. Cada um continua sob a própria licença.
 
-## Voz: Kokoro-82M (`tts-models/kokoro-en-v0_19/`)
+## Voz: Kokoro-82M (opcional, baixada pelo app)
 
 - Origem: https://huggingface.co/hexgrad/Kokoro-82M, empacotado pelo projeto sherpa-onnx
-  (https://github.com/k2-fsa/sherpa-onnx).
-- Licença: Apache License 2.0 — texto completo em `tts-models/kokoro-en-v0_19/LICENSE`.
+  (https://github.com/k2-fsa/sherpa-onnx). Não vem no instalador: o app baixa o pacote oficial do
+  sherpa-onnx quando o usuário escolhe "Baixar voz" (Configurações → Voz).
+- Licença: Apache License 2.0 — o texto completo vem junto com a voz baixada (`voices/kokoro-en-v0_19/LICENSE`).
 
 ## Motor de voz: sherpa-onnx
 

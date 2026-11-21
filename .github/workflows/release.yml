@@ -35,10 +35,6 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Modelo de voz (não fica no git)
-        shell: bash
-        run: ./scripts/fetch-models.sh
-
       - name: Instalar tauri-cli
         run: cargo install tauri-cli --version "^2" --locked
 

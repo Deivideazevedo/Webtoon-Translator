@@ -39,7 +39,7 @@ Também há pacotes `.deb` (Debian/Ubuntu) e `.rpm` (Fedora).
 **Windows** — baixe e rode o instalador `.exe` (ou o `.msi`). Como o app não tem assinatura digital paga,
 o Windows pode mostrar "O Windows protegeu o computador": clique em **Mais informações → Executar assim mesmo**.
 
-O download é grande (~400MB) porque já inclui o modelo de voz, que roda offline.
+A voz em inglês é opcional e baixada dentro do app (veja abaixo), então o instalador é leve.
 
 ## Primeira configuração (2 minutos)
 
@@ -51,7 +51,9 @@ O download é grande (~400MB) porque já inclui o modelo de voz, que roda offlin
    - **Qualquer gateway compatível com OpenAI** (OpenRouter, um servidor local, etc.): informe a URL base
      (para o OpenRouter, `https://openrouter.ai/api`) e a chave.
 3. Clique em **Testar conexão**, escolha um modelo na lista e **Salvar**.
-4. Opcional: **🏁 Rodar benchmark** mede todos os modelos com uma tradução de verdade e marca os 5 mais
+4. Para ouvir a pronúncia: **Configurações → Voz → Baixar voz** (~305 MB, uma vez só). A voz roda no seu
+   computador, sem internet depois de instalada. Sem ela o app traduz normalmente, só não fala.
+5. Opcional: **🏁 Rodar benchmark** mede todos os modelos com uma tradução de verdade e marca os 5 mais
    rápidos como favoritos. Cada modelo testado conta como uma chamada à API.
 
 Dica: modelos "flash"/"mini"/"haiku" são os mais rápidos para esse uso.
@@ -69,6 +71,7 @@ Dica: modelos "flash"/"mini"/"haiku" são os mais rápidos para esse uso.
 | O quê | Linux | Windows |
 |---|---|---|
 | Configurações, traduções recentes e favoritas, áudios dos favoritos | `~/.config/com.deivide.webtoontranslator/` | `%APPDATA%\com.deivide.webtoontranslator\` |
+| Voz baixada (~335 MB) | `~/.local/share/com.deivide.webtoontranslator/voices/` | `%LOCALAPPDATA%\com.deivide.webtoontranslator\voices\` |
 | Chaves de API | Cofre de senhas do sistema (KWallet / GNOME Keyring) | Gerenciador de Credenciais do Windows |
 
 As chaves só saem do cofre se você exportar um backup com a opção "Incluir chaves de API" marcada.
@@ -80,11 +83,13 @@ Requisitos: [Rust](https://rustup.rs) e as dependências do Tauri para o seu sis
 desenvolvimento do PipeWire, Wayland e X11 (veja `.github/workflows/release.yml`).
 
 ```bash
-./scripts/fetch-models.sh          # baixa o modelo de voz (~305MB), que não fica no git
 cargo install tauri-cli --version "^2" --locked
 cd src-tauri
 cargo tauri build                  # gera os instaladores em src-tauri/target/release/bundle/
 ```
+
+O núcleo (OCR, tradução, pronúncia, voz) fica em `core/` e é compartilhado com o app Android.
+`./scripts/fetch-models.sh` baixa a voz para rodar os testes de voz (`cd core && cargo test --release`).
 
 Para medir desempenho, rode com `WEBTOON_PERF_LOG=1`: cada etapa (OCR, API, voz) é registrada em `perf.log`
 na pasta de configuração.

@@ -20,6 +20,9 @@ base64 = "0.22"
 ocrs = "0.14"
 rten = "0.28"
 sherpa-onnx = { version = "2.0.2", default-features = false, features = ["static"], optional = true }
+sha2 = "0.11.1"
+tar = "0.4.46"
+bzip2 = "0.6.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

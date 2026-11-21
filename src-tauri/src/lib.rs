@@ -7,6 +7,7 @@ use webtoon_core::pronunciation;
 use webtoon_core::text::*;
 use webtoon_core::translate::*;
 use webtoon_core::tts::OfflineTts;
+use webtoon_core::voice;
 use std::fs;
 use tauri::{Emitter, Manager};
 
@@ -149,6 +150,9 @@ fn load_tts_engine(app: &tauri::AppHandle, guard: &mut Option<OfflineTts>, sessi
 /// Começa a carregar o motor de voz em background (chamado quando o overlay de seleção abre:
 /// o usuário ainda está arrastando a área, então os ~2s de carga somem nesse tempo).
 fn warm_up_tts(app: &tauri::AppHandle) {
+    if !voice_installed() {
+        return;
+    }
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<TtsState>();
@@ -171,6 +175,9 @@ fn synthesize_speech(app: &tauri::AppHandle, text: &str, session: &str) -> Resul
     if let Some(url) = read_favorite_audio(app, text) {
         tts_cache_put(app, key, url.clone());
         return Ok((url, true));
+    }
+    if !voice_installed() {
+        return Err(VOICE_MISSING.to_string());
     }
 
     let state = app.state::<TtsState>();
@@ -233,6 +240,9 @@ fn is_favorite_text(app: &tauri::AppHandle, text: &str) -> bool {
 /// Garante o .wav de cada texto em background (usa o cache se já foi gerado; senão sintetiza).
 /// Avisa a tela principal no fim, pra atualizar o espaço ocupado.
 fn ensure_favorite_audio(app: tauri::AppHandle, texts: Vec<String>) {
+    if !voice_installed() {
+        return;
+    }
     tauri::async_runtime::spawn_blocking(move || {
         let Ok(dir) = favorite_audio_dir(&app) else { return };
         let mut saved = 0;
@@ -271,6 +281,9 @@ fn gc_favorite_audio(app: &tauri::AppHandle) {
 /// Gera áudios em segundo plano, em fila (o motor é um só), pra quando o usuário clicar
 /// o áudio já estar no cache.
 fn pregenerate_speech(app: tauri::AppHandle, texts: Vec<String>, session: String, reason: &'static str) {
+    if !voice_installed() {
+        return;
+    }
     tauri::async_runtime::spawn_blocking(move || {
         for text in texts.into_iter().filter(|t| !t.trim().is_empty()) {
             let started = std::time::Instant::now();
@@ -345,8 +358,91 @@ fn create_ocr_engine() -> Result<OcrEngine, String> {
 }
 
 fn create_tts() -> Result<OfflineTts, String> {
-    let base = tts_models_dir();
-    webtoon_core::tts::create_kokoro(&base.join("kokoro-en-v0_19"), &base.join("lexicon-en-us.txt"))
+    webtoon_core::tts::create_kokoro(&voice::kokoro_dir(&voices_dir()), &lexicon_path())
+}
+
+// --- Voz Kokoro opcional: baixada pelo usuário em Configurações → Voz ---
+
+/// Pasta da voz baixada (dados do app, fora do pacote): definida no setup.
+static VOICES_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+fn voices_dir() -> std::path::PathBuf {
+    VOICES_DIR.get().cloned().unwrap_or_default()
+}
+
+fn voice_installed() -> bool {
+    voice::is_installed(&voices_dir())
+}
+
+/// Prefixo que o balão reconhece pra mostrar "baixe a voz" em vez de um erro genérico.
+const VOICE_MISSING: &str = "VOZ_NAO_INSTALADA: baixe a voz em Configurações → Voz.";
+
+struct VoiceDownload {
+    running: std::sync::atomic::AtomicBool,
+    cancel: std::sync::atomic::AtomicBool,
+}
+
+#[tauri::command]
+fn voice_status() -> serde_json::Value {
+    serde_json::json!({
+        "installed": voice_installed(),
+        "installed_bytes": voice::installed_bytes(&voices_dir()),
+        "download_bytes": voice::KOKORO_ARCHIVE_BYTES,
+    })
+}
+
+/// Baixa (com progresso no evento "voice-progress"), confere o SHA-256 e instala a voz.
+#[tauri::command]
+async fn download_voice(app: tauri::AppHandle) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    let state = app.state::<VoiceDownload>();
+    if state.running.swap(true, Ordering::SeqCst) {
+        return Err("O download da voz já está em andamento.".to_string());
+    }
+    state.cancel.store(false, Ordering::SeqCst);
+
+    let result = async {
+        let dir = voices_dir();
+        fs::create_dir_all(&dir).map_err(|e| format!("Não consegui criar a pasta da voz: {e}"))?;
+        let archive = dir.join("kokoro.tar.bz2");
+        let mut last_pct = u64::MAX;
+        voice::download_archive(&archive, &state.cancel, |done, total| {
+            let pct = done * 100 / total.max(1);
+            if pct != last_pct {
+                last_pct = pct;
+                let _ = app.emit("voice-progress", serde_json::json!({"stage": "download", "done": done, "total": total}));
+            }
+        })
+        .await?;
+        let _ = app.emit("voice-progress", serde_json::json!({"stage": "install"}));
+        let installed = tauri::async_runtime::spawn_blocking({
+            let (archive, dir) = (archive.clone(), dir.clone());
+            move || voice::install_archive(&archive, &dir)
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+        let _ = fs::remove_file(&archive);
+        installed
+    }
+    .await;
+
+    state.running.store(false, Ordering::SeqCst);
+    let _ = app.emit("voice-progress", serde_json::json!({"stage": if result.is_ok() { "done" } else { "error" }}));
+    result
+}
+
+#[tauri::command]
+fn cancel_voice_download(app: tauri::AppHandle) {
+    app.state::<VoiceDownload>().cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Descarrega o motor da memória antes de apagar (no Windows não dá pra apagar arquivo em uso).
+#[tauri::command]
+fn remove_voice(app: tauri::AppHandle) -> Result<(), String> {
+    if let Ok(mut guard) = app.state::<TtsState>().0.lock() {
+        *guard = None;
+    }
+    voice::remove(&voices_dir())
 }
 
 fn run_ocr(app: &tauri::AppHandle, image: &image::RgbaImage) -> Result<String, String> {
@@ -1298,6 +1394,10 @@ pub fn run() {
     tauri::Builder::default()
         .manage(BubbleState(std::sync::Mutex::new(None)))
         .manage(TtsState(std::sync::Mutex::new(None)))
+        .manage(VoiceDownload {
+            running: std::sync::atomic::AtomicBool::new(false),
+            cancel: std::sync::atomic::AtomicBool::new(false),
+        })
         .manage(TtsCache(std::sync::Mutex::new(std::collections::VecDeque::new())))
         .manage(OcrState(std::sync::Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
@@ -1326,6 +1426,10 @@ pub fn run() {
             get_bubble_data,
             speak_text,
             set_shortcut,
+            voice_status,
+            download_voice,
+            cancel_voice_download,
+            remove_voice,
         ])
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -1340,6 +1444,9 @@ pub fn run() {
         .setup(|app| {
             if let Ok(dir) = app.path().resource_dir() {
                 let _ = RESOURCES_DIR.set(dir);
+            }
+            if let Ok(dir) = app.path().app_local_data_dir() {
+                let _ = VOICES_DIR.set(dir.join("voices"));
             }
             let handle = app.handle().clone();
             if let Ok(settings) = load_settings(handle.clone()) {
