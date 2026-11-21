@@ -1,4 +1,4 @@
-package com.deivide.webtoontranslator.ui.home
+package com.deivide.webtoontranslator.ui.translations
 
 import com.deivide.webtoontranslator.data.library.Library
 import com.deivide.webtoontranslator.data.library.SavedList
@@ -6,9 +6,7 @@ import com.deivide.webtoontranslator.data.settings.ReadingOptions
 import com.deivide.webtoontranslator.domain.model.Translation
 import com.deivide.webtoontranslator.ui.common.UiText
 
-data class HomeUiState(
-    /** Tradutor flutuante ligado. */
-    val floatingRunning: Boolean = false,
+data class TranslationsUiState(
     val tab: SavedList = SavedList.RECENT,
     val library: Library = Library(),
     /** Modo de seleção (segurar o dedo num cartão): ids marcados pra excluir. */

@@ -14,7 +14,7 @@ Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito · ➖ descartado ou abso
 | # | Item | Status |
 |---|---|---|
 | M1 | **Cartão flutuante novo**: escuro translúcido, arrastável, cabeçalho só com ícones iguais (🔊 🐢 📋 ★ IPA 📖 · ⌗ ✕) | 🟨 (feito; falta a opacidade configurável) |
-| M2 | **Seletor de modo** (menu do ícone e tela Inicial) | 🟨 (no menu do ícone; falta na tela Inicial) |
+| M2 | **Seletor de modo** (menu do ícone e tela Inicial) | ✅ |
 | M3 | **Região** no cartão novo | ✅ |
 | M4 | **Região fixa**: área com alças nos cantos e ✓/✗; toque no ícone traduz de novo; ⌗ redefine (absorve o item 31) | ✅ |
 | M5 | **Tela cheia**: OCR com posição de cada bloco + agrupamento em balões; uma chamada à IA pra todos; tradução em cima de cada balão; toque abre o cartão completo | ✅ (traduções acima de cada balão, arrastáveis) |
@@ -28,12 +28,12 @@ resto: as próximas telas já nascem no padrão novo.
 
 | # | Item | Status |
 |---|---|---|
-| L1 | **Tema claro e escuro** com as cores do LAYOUT.md (neutros + azul), seguindo o sistema; opção Automático / Claro / Escuro | ⬜ |
-| L2 | **Componentes padrão**: barra do topo fixa, navegação inferior, cartão de seção, título de seção, `IconTile` (quadrado/redondo, cor em transparência + ícone sólido), linha de configuração, seletor ▾, bottom sheet de opções, abas em pílula | ⬜ |
-| L3 | **Navegação inferior: Inicial \| Traduções \| Mais** | ⬜ |
-| L4 | **Inicial**: cartão com botão grande + pílula de status + seletores **Modelo de IA** e **Modo de tradução** (bottom sheets); última tradução; personalizar ícone | ⬜ |
-| L5 | **Traduções**: traduzir texto digitado/colado (absorve o item 37) + Recentes/Favoritos | ⬜ |
-| L6 | **Mais**: Conexão, Voz, Aparência, Acesso rápido · Dados (Backup, Armazenamento) · Suporte (Tutorial, App fechando sozinho, Sobre e licenças) | ⬜ |
+| L1 | **Tema claro e escuro** com as cores do LAYOUT.md (neutros + azul), seguindo o sistema; opção Automático / Claro / Escuro | ✅ |
+| L2 | **Componentes padrão**: barra do topo fixa, navegação inferior, cartão de seção, título de seção, `IconTile` (quadrado/redondo, cor em transparência + ícone sólido), linha de configuração, seletor ▾, bottom sheet de opções, abas em pílula | ✅ |
+| L3 | **Navegação inferior: Inicial \| Traduções \| Mais** | ✅ |
+| L4 | **Inicial**: cartão com botão grande + pílula de status + seletores **Modelo de IA** e **Modo de tradução** (bottom sheets); última tradução; personalizar ícone | 🟨 (cartão de controle, seletores de modelo ★ e de modo, última tradução; falta "personalizar ícone") |
+| L5 | **Traduções**: traduzir texto digitado/colado (absorve o item 37) + Recentes/Favoritos | 🟨 (Recentes/Favoritos em pílula; falta digitar/colar frase) |
+| L6 | **Mais**: Conexão, Voz, Aparência, Acesso rápido · Dados (Backup, Armazenamento) · Suporte (Tutorial, App fechando sozinho, Sobre e licenças) | 🟨 (Conexão no visual novo com o seletor de modelo, Voz com velocidade e exemplo, Aparência; falta o resto) |
 | L7 | **Voz**: voz do Android (escolher entre as instaladas), **tom** e velocidade, ouvir exemplo — tudo nativo, sem gerar áudio | ⬜ |
 | L8 | Cartão de tradução e ícone flutuante seguindo o tema e o padrão de botões redondos | ⬜ |
 | L9 | **Opção "Pronúncia em IPA"** (em Mais → Aparência ou Voz): desligada por padrão; ligada, mostra o botão IPA no cartão pra alternar PT-BR ⇄ IPA | ⬜ |
@@ -46,7 +46,7 @@ resto: as próximas telas já nascem no padrão novo.
 | # | Item | Status |
 |---|---|---|
 | 1 | **Botão grande Iniciar/Parar** o tradutor flutuante, com o estado escrito embaixo 💡 | ✅ |
-| 2 | **Seletor de modelo** na tela inicial, com ★ favoritos no topo | ⬜ |
+| 2 | **Seletor de modelo** na tela inicial, com ★ favoritos no topo | ✅ |
 | 3 | **Recentes (até 20) / Favoritos** (sem limite, mostrando o espaço ocupado por texto + áudio); ★ em cada cartão; o cartão ativo fica destacado | ✅ |
 | 4 | **Excluir em lote**: segurar o dedo num cartão entra no modo de seleção (caixas de marcar + "Excluir (n)") | ✅ |
 | 5 | Tocar num cartão do histórico **abre a tradução completa** de novo | ✅ |
@@ -56,7 +56,7 @@ resto: as próximas telas já nascem no padrão novo.
 | # | Item | Status |
 |---|---|---|
 | 6 | Provedor (Google, Anthropic, compatível OpenAI), URL do gateway e chave de API cifrada | ✅ |
-| 7 | Modelo com lista dos modelos da chave e **★ favoritos** | 🟨 (lista feita, falta ★) |
+| 7 | Modelo com lista dos modelos da chave e **★ favoritos** | ✅ (★ no seletor de modelo da tela Inicial) |
 | 8 | **⏱ Testar velocidade** do modelo escolhido | ⬜ |
 | 9 | **🏁 Rodar benchmark**: mede todos os modelos e marca os 5 mais rápidos como favoritos (mover a lógica do desktop pro `core/` pra os dois usarem) | ⬜ |
 
@@ -67,7 +67,7 @@ resto: as próximas telas já nascem no padrão novo.
 | 10 | **Voz do Android** como padrão (escolher entre as vozes em inglês instaladas, **tom** e velocidade — ver L7) | 🟨 (já fala, falta escolher a voz) |
 | 11 | **Velocidade da fala** (padrão 0,70x, dica e "↺ Voltar ao padrão") | ✅ |
 | 12 | **🐢 lento** fixo em 0,5x, independente da velocidade configurada | ✅ |
-| 13 | **▶ Ouvir exemplo** da voz escolhida | ⬜ |
+| 13 | **▶ Ouvir exemplo** da voz escolhida | ✅ (Mais → Voz → Ouvir exemplo) |
 | 14 | ~~Vozes Kokoro/Piper pra baixar~~ — descartado no Android: a voz do sistema já troca voz, tom e velocidade na hora, sem baixar nada (ver L7) | ➖ |
 
 **Configurações → Geral**

@@ -1,4 +1,4 @@
-package com.deivide.webtoontranslator.ui.home.components
+package com.deivide.webtoontranslator.ui.translations.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
@@ -34,12 +34,12 @@ import androidx.compose.ui.unit.sp
 import com.deivide.webtoontranslator.R
 import com.deivide.webtoontranslator.data.library.SavedList
 import com.deivide.webtoontranslator.domain.model.Translation
-import com.deivide.webtoontranslator.ui.home.HomeUiState
+import com.deivide.webtoontranslator.ui.translations.TranslationsUiState
 
 /** Lista da aba aberta; vazia, mostra uma dica de como encher. */
 @Composable
 fun HistoryList(
-    state: HomeUiState,
+    state: TranslationsUiState,
     onClick: (Translation) -> Unit,
     onLongClick: (Translation) -> Unit,
     onToggleFavorite: (Translation) -> Unit,
@@ -90,7 +90,7 @@ private fun HistoryCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = if (isActive || selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
     ) {

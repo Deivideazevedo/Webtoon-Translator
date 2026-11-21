@@ -33,6 +33,10 @@ destaque. Não usamos nenhum arquivo deles (ícones, logo, telas são deles); os
   no azul; inativas = cinza.
 - **Fundo** neutro; **todo conteúdo em cartões** com cantos bem arredondados.
 - **Seleções abrem bottom sheets** (painel que sobe de baixo), nunca menus suspensos.
+- **Item em uso** (modelo, modo, provedor, aparência…) = **borda na cor primária** (azul), sem ícone
+  de visto.
+- **Transições**: abrir uma tela de detalhe desliza pra esquerda (a nova entra pela direita) e
+  voltar desliza pra direita; trocar de aba da navegação inferior só faz um fade.
 
 ---
 
@@ -225,8 +229,8 @@ sem gerar áudio nem baixar modelo.
 ├──────────────────────────────────┤
 │        Escolher modelo        ✕  │  ← título centralizado, negrito; ✕ à direita
 │ ┌──────────────────────────────┐ │
-│ │ ★ gemini-3-flash          ✓  │ │  ← itens = blocos arredondados (cor de "campo")
-│ └──────────────────────────────┘ │     selecionado com ✓ no azul
+│ │ ★ gemini-3-flash             │ │  ← itens = blocos arredondados (cor de "campo")
+│ └──────────────────────────────┘ │     o em uso com BORDA azul
 │ ┌──────────────────────────────┐ │
 │ │ ★ claude-haiku               │ │
 │ └──────────────────────────────┘ │

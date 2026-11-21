@@ -27,7 +27,7 @@ class ComposeOverlay(
     private val view = ComposeView(context).apply {
         setViewTreeLifecycleOwner(lifecycle)
         setViewTreeSavedStateRegistryOwner(lifecycle)
-        setContent { WebtoonTheme(content) }
+        setContent { WebtoonTheme(content = content) }
         if (onOutsideTouch != null || onTouchDown != null) {
             setOnTouchListener { _, event ->
                 when (event.actionMasked) {

@@ -1,4 +1,4 @@
-package com.deivide.webtoontranslator.ui.home.components
+package com.deivide.webtoontranslator.ui.translations.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close

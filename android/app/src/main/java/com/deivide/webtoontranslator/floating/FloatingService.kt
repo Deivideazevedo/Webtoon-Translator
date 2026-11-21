@@ -65,13 +65,8 @@ class FloatingService : Service(), FloatingIcon.Listener {
     /** Refaz a última tradução do cartão ("Tentar de novo"). */
     private var lastRun: (() -> Unit)? = null
 
-    private var mode: TranslationMode = TranslationMode.REGION
-        set(value) {
-            field = value
-            settings.translationMode = value
-            icon?.tapArms = value == TranslationMode.REGION
-            screenBlocks?.remove()
-        }
+    /** Modo atual; muda pelo menu do ícone ou pela tela Inicial (ver [applyMode]). */
+    private val mode: TranslationMode get() = settings.translationMode
 
     private val cardActions by lazy {
         val actions = container.translationActions
@@ -123,7 +118,8 @@ class FloatingService : Service(), FloatingIcon.Listener {
         selection = SelectionOverlay(this, windows)
         screenBlocks = ScreenBlocksOverlay(this, windows, onOpen = ::openBlock, onDismiss = { screenBlocks?.remove() })
         icon = FloatingIcon(this, windows, this).also { it.show() }
-        mode = settings.translationMode
+        // O modo pode mudar por fora (tela Inicial); o ícone se ajusta sozinho.
+        scope.launch { settings.mode.collect(::applyMode) }
         container.floatingStatus.set(true)
     }
 
@@ -153,7 +149,10 @@ class FloatingService : Service(), FloatingIcon.Listener {
         closeMenu()
         when (mode) {
             TranslationMode.FULL_SCREEN -> if (screenBlocks?.isShown == true) screenBlocks?.remove() else translateFullScreen()
-            else -> settings.fixedRegion?.let(::translateRegion) ?: openEditor()
+            else -> {
+                val region = settings.fixedRegion
+                if (region == null || reviewFixedRegion) openEditor() else translateRegion(region)
+            }
         }
     }
 
@@ -193,9 +192,24 @@ class FloatingService : Service(), FloatingIcon.Listener {
         translateRegion(region)
     }
 
+    /** Região fixa escolhida pela tela Inicial: o próximo toque mostra a área antes de traduzir. */
+    private var reviewFixedRegion = false
+    private var appliedMode: TranslationMode? = null
+
+    private fun applyMode(newMode: TranslationMode) {
+        if (appliedMode != null && newMode != appliedMode && newMode == TranslationMode.FIXED_REGION) {
+            reviewFixedRegion = true
+        }
+        appliedMode = newMode
+        icon?.tapArms = newMode == TranslationMode.REGION
+        screenBlocks?.remove()
+    }
+
+    /** Troca pelo menu do ícone (o editor já abre aqui, então não precisa revisar no próximo toque). */
     private fun selectMode(newMode: TranslationMode) {
         closeMenu()
-        mode = newMode
+        applyMode(newMode)
+        settings.translationMode = newMode
         when (newMode) {
             // Sempre mostra a área (a salva, se houver) pra conferir/ajustar antes de traduzir.
             TranslationMode.FIXED_REGION -> openEditor()
@@ -312,6 +326,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
     // --- Região fixa ---
 
     private fun openEditor() {
+        reviewFixedRegion = false
         closeMenu()
         closeEditor()
         closeCard()

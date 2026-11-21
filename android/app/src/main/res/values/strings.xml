@@ -5,7 +5,6 @@
     <!-- Ações comuns -->
     <string name="action_back">Voltar</string>
     <string name="action_close">Fechar</string>
-    <string name="action_settings">Configurações</string>
     <string name="action_copy">📋 Copiar</string>
     <string name="action_favorite">Favoritar</string>
     <string name="action_unfavorite">Remover dos favoritos</string>
@@ -13,11 +12,39 @@
     <string name="action_cancel">Cancelar</string>
     <string name="action_clear_selection">Cancelar seleção</string>
 
+    <!-- Navegação -->
+    <string name="tab_home">Inicial</string>
+    <string name="tab_translations">Traduções</string>
+    <string name="tab_more">Mais</string>
+
     <!-- Tela inicial -->
+    <string name="language_english">Inglês</string>
+    <string name="language_portuguese">Português</string>
+    <string name="model_label">Modelo de IA</string>
+    <string name="model_choose">Escolher modelo</string>
+    <string name="model_sheet_title">Escolher modelo</string>
+    <string name="model_favorites">★ Favoritos</string>
+    <string name="model_all">Todos os modelos</string>
+    <string name="model_not_configured">Configurar a conexão</string>
+    <string name="model_not_configured_desc">Informe o provedor e a chave de API pra listar os modelos.</string>
+    <string name="mode_region_desc">Toque no ícone e arraste a setinha sobre o balão</string>
+    <string name="mode_fixed_region_desc">Marque a área uma vez e traduza de novo com um toque</string>
+    <string name="mode_full_screen_desc">Traduz todos os balões da tela com um toque</string>
+    <string name="last_translation">Última tradução</string>
+
+    <!-- Mais -->
+    <string name="more_connection">Conexão</string>
+    <string name="more_connection_desc">Provedor, chave de API e modelo</string>
+    <string name="more_appearance">Aparência</string>
+    <string name="more_voice">Voz</string>
+    <string name="more_voice_desc">Velocidade da fala e exemplo</string>
+    <string name="voice_speed">Velocidade</string>
+    <string name="voice_sample">Ouvir exemplo</string>
+    <string name="theme_system">Automático</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_dark">Escuro</string>
     <string name="floating_start">Iniciar tradutor flutuante</string>
     <string name="floating_stop">Parar tradutor flutuante</string>
-    <string name="floating_running">Ligado: toque no ícone flutuante e arraste-o sobre o balão.</string>
-    <string name="floating_stopped">Desligado</string>
     <string name="tab_recent">Recentes</string>
     <string name="tab_favorites">Favoritos</string>
     <!-- quantas / limite -->
@@ -95,20 +122,13 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
     <string name="speech_missing_voice">Instale a voz em inglês nas configurações de voz do Android.</string>
 
     <!-- Configurações -->
-    <string name="settings_title">Configurações</string>
     <string name="settings_provider">Provedor</string>
     <string name="settings_gateway_url">URL do gateway</string>
     <string name="settings_api_key">Chave de API</string>
     <string name="settings_show_key">ver</string>
     <string name="settings_hide_key">ocultar</string>
     <string name="settings_model">Modelo</string>
-    <string name="settings_list_models">Listar</string>
     <string name="settings_loading_models">Buscando modelos…</string>
-    <plurals name="settings_models_found">
-        <item quantity="one">%1$d modelo. Toque nele pra escolher.</item>
-        <item quantity="other">%1$d modelos. Toque em um pra escolher.</item>
-    </plurals>
-    <string name="settings_speech_speed">Velocidade da fala (%1$.2fx)</string>
     <string name="settings_speech_default_hint">Padrão: 0,70x (um pouco mais devagar que a fala normal, bom pra acompanhar a leitura).</string>
     <string name="settings_reset_speed">↺ Voltar ao padrão</string>
     <string name="settings_save">Salvar</string>
