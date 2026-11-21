@@ -59,8 +59,11 @@ internal fun LearnSection(
             LearnTabChip(LearnTab.GRAMMAR, tab, R.string.result_grammar, actions)
         }
     }
+    val aligned = alignGloss(translation.originalText, translation.gloss)
     when (tab) {
-        LearnTab.SEGMENTS -> segments.forEach { SegmentItem(it, options, actions) }
+        LearnTab.SEGMENTS -> segments.forEach {
+            SegmentItem(it, segmentGloss(translation.originalText, aligned, it.text), options, actions)
+        }
         LearnTab.GRAMMAR -> Text(translation.grammarNotes, fontSize = 13.sp)
     }
 }
@@ -76,10 +79,16 @@ private fun LearnTabChip(tab: LearnTab, selected: LearnTab, label: Int, actions:
 }
 
 @Composable
-private fun SegmentItem(segment: Segment, options: ReadingOptions, actions: TranslationCardActions) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(stringResource(R.string.segment_line, segment.text, segment.meaning), fontSize = 14.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
+private fun SegmentItem(
+    segment: Segment,
+    gloss: List<GlossSpan>,
+    options: ReadingOptions,
+    actions: TranslationCardActions,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        GlossText(segment.text, gloss, fontSize = 15.sp)
+        Text(segment.meaning, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
             SpeakButtons(segment.text, actions.onSpeak)
             Pronunciation(segment.pronunciationPt, segment.pronunciationIpa, options, actions, Modifier.weight(1f))
         }

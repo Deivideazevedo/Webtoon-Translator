@@ -46,6 +46,9 @@
     <string name="mode_title">Modo de tradução</string>
     <string name="mode_region">Região</string>
     <string name="mode_fixed_region">Região fixa</string>
+    <string name="mode_full_screen">Tela cheia</string>
+    <string name="full_screen_hint">Toque no ícone pra traduzir a tela; toque numa tradução pra ver os detalhes</string>
+    <string name="full_screen_reading">Lendo e traduzindo a tela…</string>
     <string name="cd_speak">Ouvir</string>
     <string name="cd_speak_slow">Ouvir devagar</string>
     <string name="cd_toggle_ipa">Alternar pronúncia PT-BR / IPA</string>
@@ -80,12 +83,15 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
     <string name="pronunciation_show_pt">PT</string>
     <string name="learn_show">📖 Aprender ▾</string>
     <string name="learn_hide">📖 Aprender ▴</string>
-    <!-- trecho — significado -->
-    <string name="segment_line">%1$s — %2$s</string>
 
     <!-- Erros e avisos -->
     <string name="error_not_configured">Configure a chave de API e o modelo em ⚙ Configurações.</string>
     <string name="error_no_text">Não encontrei texto nessa área. Tente pegar o balão inteiro.</string>
+    <string name="error_no_text_screen">Não encontrei balões com texto nesta tela.</string>
+    <string name="error_translate_failed">Não consegui traduzir agora.</string>
+    <string name="error_read_failed">Não consegui ler o texto dessa área.</string>
+    <string name="error_screen_failed">Não consegui traduzir a tela agora. Toque no ícone pra tentar de novo.</string>
+    <string name="action_retry">↻ Tentar de novo</string>
     <string name="speech_not_ready">A voz do Android ainda está carregando.</string>
     <string name="speech_missing_voice">Instale a voz em inglês nas configurações de voz do Android.</string>
 

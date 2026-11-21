@@ -1,6 +1,15 @@
 package com.deivide.webtoontranslator.ui.translation.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +41,7 @@ fun TranslationPreview(
         Text(state.translation, fontSize = 18.sp)
     }
     Spacer(Modifier.size(8.dp))
-    OriginalLine(state.original, state.pronunciationPt, state.pronunciationIpa, options, actions)
+    OriginalLine(state.original, emptyList(), state.pronunciationPt, state.pronunciationIpa, options, actions)
 }
 
 /** Tradução completa: frase, original com pronúncia, "📖 Aprender" e rodapé. */
@@ -42,6 +51,7 @@ fun TranslationBody(translation: Translation, options: ReadingOptions, actions: 
     Spacer(Modifier.size(8.dp))
     OriginalLine(
         translation.originalText,
+        alignGloss(translation.originalText, translation.gloss),
         translation.pronunciationPt,
         translation.pronunciationIpa,
         options,
@@ -56,27 +66,44 @@ fun TranslationBody(translation: Translation, options: ReadingOptions, actions: 
     )
 }
 
-/** Frase original com 🔊/🐢 e a pronúncia (PT-BR ou IPA, alternável). */
+/** Frase original (com a glosa nas palavras), 🔊/🐢 e a pronúncia. */
 @Composable
 private fun OriginalLine(
     text: String,
+    gloss: List<GlossSpan>,
     pronunciationPt: String,
     pronunciationIpa: String,
     options: ReadingOptions,
     actions: TranslationCardActions,
 ) {
     if (text.isBlank()) return
-    Text(text, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    GlossText(text, gloss, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
         SpeakButtons(text, actions.onSpeak)
         Pronunciation(pronunciationPt, pronunciationIpa, options, actions, Modifier.weight(1f))
     }
 }
 
+/** 🔊 e 🐢 lado a lado, redondos e compactos. */
 @Composable
 internal fun SpeakButtons(text: String, onSpeak: (String, Boolean) -> Unit) {
-    TextButton(onClick = { onSpeak(text, false) }) { Text(stringResource(R.string.speak_normal)) }
-    TextButton(onClick = { onSpeak(text, true) }) { Text(stringResource(R.string.speak_slow)) }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(end = 8.dp)) {
+        RoundButton(stringResource(R.string.speak_normal), stringResource(R.string.cd_speak)) { onSpeak(text, false) }
+        RoundButton(stringResource(R.string.speak_slow), stringResource(R.string.cd_speak_slow)) { onSpeak(text, true) }
+    }
+}
+
+@Composable
+private fun RoundButton(label: String, description: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) { Text(label, fontSize = 14.sp) }
 }
 
 /** Pronúncia escrita, com o botão que alterna entre PT-BR e IPA (a escolha fica salva). */
@@ -88,7 +115,7 @@ internal fun Pronunciation(
     actions: TranslationCardActions,
     modifier: Modifier = Modifier,
 ) {
-    val shown = if (options.showIpa && ipa.isNotBlank()) ipa else pt
+    val shown = if (options.ipaEnabled && options.showIpa && ipa.isNotBlank()) ipa else pt
     if (shown.isBlank()) return
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -97,7 +124,7 @@ internal fun Pronunciation(
             fontSize = 13.sp,
             modifier = Modifier.weight(1f),
         )
-        if (ipa.isNotBlank()) {
+        if (options.ipaEnabled && ipa.isNotBlank()) {
             TextButton(onClick = { actions.onOptionsChange { it.copy(showIpa = !it.showIpa) } }) {
                 Text(stringResource(if (options.showIpa) R.string.pronunciation_show_pt else R.string.pronunciation_show_ipa))
             }

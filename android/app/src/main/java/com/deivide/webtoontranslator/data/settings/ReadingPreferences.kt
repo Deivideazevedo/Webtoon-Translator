@@ -11,7 +11,12 @@ enum class LearnTab { SEGMENTS, GRAMMAR }
 
 /** Como o cartão de tradução aparece (lembrado entre traduções, como no balão do desktop). */
 data class ReadingOptions(
-    /** Pronúncia em IPA em vez da grafia PT-BR. */
+    /**
+     * Recurso de IPA ligado (botão de alternar aparece). Desligado por padrão: a pronúncia em
+     * PT-BR atende a maioria; quem quiser IPA liga nas configurações.
+     */
+    val ipaEnabled: Boolean = false,
+    /** Pronúncia em IPA em vez da grafia PT-BR (só vale com [ipaEnabled]). */
     val showIpa: Boolean = false,
     /** Seção "📖 Aprender" aberta. */
     val learnOpen: Boolean = false,
@@ -23,6 +28,7 @@ class ReadingPreferences(context: Context) {
 
     private val _options = MutableStateFlow(
         ReadingOptions(
+            ipaEnabled = prefs.getBoolean(KEY_IPA_ENABLED, false),
             showIpa = prefs.getBoolean(KEY_SHOW_IPA, false),
             learnOpen = prefs.getBoolean(KEY_LEARN_OPEN, false),
             learnTab = LearnTab.entries.getOrElse(prefs.getInt(KEY_LEARN_TAB, 0)) { LearnTab.SEGMENTS },
@@ -34,6 +40,7 @@ class ReadingPreferences(context: Context) {
         _options.update(change)
         val o = _options.value
         prefs.edit {
+            putBoolean(KEY_IPA_ENABLED, o.ipaEnabled)
             putBoolean(KEY_SHOW_IPA, o.showIpa)
             putBoolean(KEY_LEARN_OPEN, o.learnOpen)
             putInt(KEY_LEARN_TAB, o.learnTab.ordinal)
@@ -41,6 +48,7 @@ class ReadingPreferences(context: Context) {
     }
 
     private companion object {
+        const val KEY_IPA_ENABLED = "ipa_enabled"
         const val KEY_SHOW_IPA = "show_ipa"
         const val KEY_LEARN_OPEN = "learn_open"
         const val KEY_LEARN_TAB = "learn_tab"

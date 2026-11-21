@@ -9,7 +9,7 @@ Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito · ➖ descartado ou abso
 
 ## Android
 
-### Modos de tradução e cartão novo (ver [`android/LAYOUT.md`](android/LAYOUT.md) §5.6–5.7) — em andamento (etapa 1 feita: M1–M4)
+### Modos de tradução e cartão novo (ver [`android/LAYOUT.md`](android/LAYOUT.md) §5.6–5.7) — em andamento (M1–M5 feitos)
 
 | # | Item | Status |
 |---|---|---|
@@ -17,7 +17,7 @@ Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito · ➖ descartado ou abso
 | M2 | **Seletor de modo** (menu do ícone e tela Inicial) | 🟨 (no menu do ícone; falta na tela Inicial) |
 | M3 | **Região** no cartão novo | ✅ |
 | M4 | **Região fixa**: área com alças nos cantos e ✓/✗; toque no ícone traduz de novo; ⌗ redefine (absorve o item 31) | ✅ |
-| M5 | **Tela cheia**: OCR com posição de cada bloco + agrupamento em balões; uma chamada à IA pra todos; tradução em cima de cada balão; toque abre o cartão completo | ⬜ |
+| M5 | **Tela cheia**: OCR com posição de cada bloco + agrupamento em balões; uma chamada à IA pra todos; tradução em cima de cada balão; toque abre o cartão completo | ✅ (traduções acima de cada balão, arrastáveis) |
 | M6 | **Região automática**: traduz sozinho quando a área muda (cartão fora da área) | ⬜ |
 | M7 | **Tela cheia automática**: traduz de novo quando a rolagem para | ⬜ |
 
@@ -36,6 +36,8 @@ resto: as próximas telas já nascem no padrão novo.
 | L6 | **Mais**: Conexão, Voz, Aparência, Acesso rápido · Dados (Backup, Armazenamento) · Suporte (Tutorial, App fechando sozinho, Sobre e licenças) | ⬜ |
 | L7 | **Voz**: voz do Android (escolher entre as instaladas), **tom** e velocidade, ouvir exemplo — tudo nativo, sem gerar áudio | ⬜ |
 | L8 | Cartão de tradução e ícone flutuante seguindo o tema e o padrão de botões redondos | ⬜ |
+| L9 | **Opção "Pronúncia em IPA"** (em Mais → Aparência ou Voz): desligada por padrão; ligada, mostra o botão IPA no cartão pra alternar PT-BR ⇄ IPA | ⬜ |
+| L10 | **Erros recentes** (em Mais → Suporte): lista das últimas falhas (API, OCR) com data e detalhe técnico, pra investigar quando uma tradução falha. O registro já é gravado (`ErrorLog`); falta a tela | ⬜ |
 
 ### Prioridade 1 — base do app (paridade com o desktop)
 
@@ -79,7 +81,7 @@ resto: as próximas telas já nascem no padrão novo.
 
 | # | Item | Status |
 |---|---|---|
-| 17 | Tradução, original e pronúncia **PT-BR ⇄ IPA** (botão pra alternar) | ✅ |
+| 17 | Tradução, original e pronúncia **PT-BR ⇄ IPA** (botão pra alternar) | ✅ (IPA escondido por padrão, ver L9) |
 | 18 | 🔊 / 🐢 na frase e em cada trecho | ✅ |
 | 19 | **📖 Aprender ▾** recolhível com abas Trechos / Gramática (lembra a escolha) | ✅ |
 | 20 | **📋 Copiar** e **★ favoritar** direto do cartão | ✅ |
@@ -100,7 +102,7 @@ resto: as próximas telas já nascem no padrão novo.
 | 25 | **Modo região**: tocar no ícone arma a seleção; arrastar o ícone desenha o retângulo a partir daquele ponto; soltar traduz. Fora disso, arrastar só move o ícone e a página embaixo continua rolando 💡 | ✅ |
 | 26 | **Toque longo** (ou tocar de novo sem arrastar) abre o menu de baixo: modo, modelo, abrir o app, parar 💡 | 🟨 (modo, abrir o app e parar; falta escolher o modelo) |
 | 27 | **Cartão de tradução perto da área selecionada**, com o conteúdo do balão do desktop (PT/IPA, 🔊, 🐢, Aprender, Copiar, ★) | ✅ |
-| 28 | **Tocar numa palavra** mostra o significado (a glosa; no celular não existe hover) 💡 | ⬜ |
+| 28 | **Tocar numa palavra** mostra o significado (a glosa; no celular não existe hover) 💡 | ✅ (pontilhado nas palavras do original e dos trechos; tocar mostra a tradução) |
 | 29 | Desligar pelo **"Parar" na notificação** e arrastando o ícone até um ✕ embaixo da tela | 🟨 ("Parar" na notificação e no menu; falta arrastar até o ✕) |
 | 30 | Tela de ajuda pro **"app fechando sozinho"** (otimização de bateria da Samsung/Xiaomi) 💡 | ⬜ |
 

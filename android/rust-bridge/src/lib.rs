@@ -73,6 +73,16 @@ pub struct Translation {
     pub duration_secs: f64,
 }
 
+/// Balão encontrado na tela (modo tela cheia), com a caixa em pixels da imagem.
+#[derive(uniffi::Record)]
+pub struct TextBlock {
+    pub text: String,
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
 impl From<TranslationResult> for Translation {
     fn from(r: TranslationResult) -> Self {
         Translation {
@@ -171,7 +181,30 @@ impl Engine {
     /// Texto de uma imagem RGBA (4 bytes por pixel, como `Bitmap.copyPixelsToBuffer` em ARGB_8888).
     pub fn recognize(&self, rgba: Vec<u8>, width: u32, height: u32) -> Result<String, BridgeError> {
         let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-        self.with_ocr(|engine| ocr::recognize_text(engine, &rgb, width, height))
+        // Linhas do mesmo balão juntas num parágrafo (o modelo traduz a frase, não linha a linha).
+        self.with_ocr(|engine| ocr::recognize_paragraphs(engine, &rgb, width, height))
+    }
+
+    /// Balões de uma imagem RGBA inteira (linhas do OCR agrupadas por proximidade).
+    pub fn recognize_blocks(&self, rgba: Vec<u8>, width: u32, height: u32) -> Result<Vec<TextBlock>, BridgeError> {
+        let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+        let lines = self.with_ocr(|engine| ocr::recognize_lines(engine, &rgb, width, height))?;
+        Ok(ocr::group_blocks(&lines)
+            .into_iter()
+            .map(|b| TextBlock { text: b.text, left: b.left, top: b.top, right: b.right, bottom: b.bottom })
+            .collect())
+    }
+
+    /// Tradução curta de vários balões numa chamada só; uma por texto, na mesma ordem.
+    pub async fn translate_blocks(
+        &self,
+        provider: String,
+        base_url: String,
+        api_key: String,
+        model: String,
+        texts: Vec<String>,
+    ) -> Result<Vec<String>, BridgeError> {
+        Ok(translate::translate_blocks(Wire::from_provider(&provider), &texts, &api_key, &base_url, &model).await?)
     }
 
     pub fn pronounce(&self, text: String) -> Option<Pronunciation> {

@@ -12,12 +12,13 @@ import com.deivide.webtoontranslator.ui.theme.WebtoonTheme
 
 /**
  * Uma janela flutuante desenhada em Compose (cartão de tradução, menu). [onOutsideTouch] é
- * chamado quando o usuário toca fora dela (pra fechar menus).
+ * chamado quando o usuário toca fora dela (pra fechar menus); [onTouchDown], quando tocam nela.
  */
 class ComposeOverlay(
     context: Context,
     private val windows: WindowManager,
     private val onOutsideTouch: (() -> Unit)? = null,
+    private val onTouchDown: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     private val lifecycle = OverlayLifecycleOwner()
@@ -27,9 +28,12 @@ class ComposeOverlay(
         setViewTreeLifecycleOwner(lifecycle)
         setViewTreeSavedStateRegistryOwner(lifecycle)
         setContent { WebtoonTheme(content) }
-        if (onOutsideTouch != null) {
+        if (onOutsideTouch != null || onTouchDown != null) {
             setOnTouchListener { _, event ->
-                if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) onOutsideTouch.invoke()
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_OUTSIDE -> onOutsideTouch?.invoke()
+                    MotionEvent.ACTION_DOWN -> onTouchDown?.invoke()
+                }
                 false
             }
         }

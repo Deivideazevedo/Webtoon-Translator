@@ -32,6 +32,7 @@ import com.deivide.webtoontranslator.data.settings.ReadingOptions
 import com.deivide.webtoontranslator.domain.model.Translation
 import com.deivide.webtoontranslator.ui.common.asString
 import com.deivide.webtoontranslator.ui.components.LoadingRow
+import com.deivide.webtoontranslator.ui.translation.components.GlossTooltipHost
 import com.deivide.webtoontranslator.ui.translation.components.TranslationBody
 import com.deivide.webtoontranslator.ui.translation.components.TranslationPreview
 
@@ -41,6 +42,8 @@ class TranslationCardActions(
     val onToggleFavorite: (Translation) -> Unit,
     val onOptionsChange: ((ReadingOptions) -> ReadingOptions) -> Unit,
     val onClose: (() -> Unit)? = null,
+    /** Refaz a última tradução (aparece quando ela falhou por um motivo passageiro). */
+    val onRetry: (() -> Unit)? = null,
 )
 
 /**
@@ -62,15 +65,17 @@ fun TranslationCard(
         shape = RoundedCornerShape(14.dp),
     ) {
         val content = if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier
-        Column(content.padding(start = 16.dp, end = 4.dp, bottom = 16.dp)) {
-            Header(state, isFavorite, actions)
-            Column(Modifier.padding(end = 12.dp)) {
-                when (state) {
-                    TranslationCardState.Reading -> LoadingRow(stringResource(R.string.result_reading))
-                    is TranslationCardState.Failed ->
-                        Text(state.message.asString(), color = MaterialTheme.colorScheme.error)
-                    is TranslationCardState.Streaming -> TranslationPreview(state, options, actions)
-                    is TranslationCardState.Done -> TranslationBody(state.translation, options, actions)
+        GlossTooltipHost(content.padding(start = 16.dp, end = 4.dp, bottom = 16.dp)) {
+            Column {
+                Header(state, isFavorite, actions)
+                Column(Modifier.padding(end = 12.dp)) {
+                    when (state) {
+                        TranslationCardState.Reading -> LoadingRow(stringResource(R.string.result_reading))
+                        is TranslationCardState.Failed ->
+                            Text(state.message.asString(), color = MaterialTheme.colorScheme.error)
+                        is TranslationCardState.Streaming -> TranslationPreview(state, options, actions)
+                        is TranslationCardState.Done -> TranslationBody(state.translation, options, actions)
+                    }
                 }
             }
         }

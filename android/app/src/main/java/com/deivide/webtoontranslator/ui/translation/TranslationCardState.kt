@@ -18,7 +18,8 @@ sealed interface TranslationCardState {
 
     data class Done(val translation: Translation) : TranslationCardState
 
-    data class Failed(val message: UiText) : TranslationCardState
+    /** [retryable]: falha passageira (API, rede, resposta quebrada) → o cartão oferece "Tentar de novo". */
+    data class Failed(val message: UiText, val retryable: Boolean = false) : TranslationCardState
 }
 
 /** Aplica um evento do streaming ao cartão (ignorado se o cartão foi fechado nesse meio-tempo). */

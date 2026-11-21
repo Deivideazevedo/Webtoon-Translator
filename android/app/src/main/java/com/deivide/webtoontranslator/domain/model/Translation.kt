@@ -36,3 +36,13 @@ sealed interface TranslationEvent {
 
     data class Done(val translation: Translation) : TranslationEvent
 }
+
+/** Balão encontrado na tela (modo tela cheia): texto, caixa em pixels da tela e tradução curta. */
+data class ScreenBlock(
+    val text: String,
+    val left: Int,
+    val top: Int,
+    val right: Int,
+    val bottom: Int,
+    val translation: String = "",
+)

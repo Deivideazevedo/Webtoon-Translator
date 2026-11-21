@@ -3,6 +3,7 @@ package com.deivide.webtoontranslator.data.translation
 import android.graphics.Bitmap
 import com.deivide.webtoontranslator.data.engine.EngineProvider
 import com.deivide.webtoontranslator.data.settings.AppSettings
+import com.deivide.webtoontranslator.domain.model.ScreenBlock
 import com.deivide.webtoontranslator.domain.model.TranslationEvent
 import java.nio.ByteBuffer
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,19 @@ class TranslationRepository(private val engines: EngineProvider) {
             engine.recognize(image.rgbaBytes(), image.width.toUInt(), image.height.toUInt())
         }
     }
+
+    /** Balões da imagem inteira (modo tela cheia), com a caixa de cada um. */
+    suspend fun recognizeBlocks(image: Bitmap): List<ScreenBlock> {
+        val engine = engines.get()
+        return withContext(Dispatchers.Default) {
+            engine.recognizeBlocks(image.rgbaBytes(), image.width.toUInt(), image.height.toUInt())
+                .map { ScreenBlock(it.text, it.left, it.top, it.right, it.bottom) }
+        }
+    }
+
+    /** Tradução curta de vários balões numa chamada só (uma por texto, na mesma ordem). */
+    suspend fun translateBlocks(texts: List<String>, settings: AppSettings): List<String> =
+        engines.get().translateBlocks(settings.provider.id, settings.baseUrl, settings.apiKey, settings.model, texts)
 
     /** Tradução em streaming: emite o original e a tradução assim que ficam prontos, e por fim [TranslationEvent.Done]. */
     fun translate(text: String, settings: AppSettings): Flow<TranslationEvent> = channelFlow {

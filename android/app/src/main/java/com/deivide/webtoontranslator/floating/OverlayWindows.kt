@@ -26,6 +26,16 @@ fun screenBounds(context: Context): Rect {
     }
 }
 
+/** Alturas (px) da barra de status e da barra de navegação, pra ignorar o que aparece nelas. */
+@android.annotation.SuppressLint("DiscouragedApi", "InternalInsetResource")
+fun systemBarHeights(context: Context): Pair<Int, Int> {
+    fun dimen(name: String): Int {
+        val id = context.resources.getIdentifier(name, "dimen", "android")
+        return if (id > 0) context.resources.getDimensionPixelSize(id) else 0
+    }
+    return dimen("status_bar_height") to dimen("navigation_bar_height")
+}
+
 /**
  * Parâmetros de uma janela por cima dos outros apps, posicionada em coordenadas absolutas da tela
  * (as mesmas da captura). Por padrão não rouba o teclado nem os toques fora dela.

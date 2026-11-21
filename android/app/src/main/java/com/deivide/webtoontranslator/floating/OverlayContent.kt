@@ -58,6 +58,7 @@ internal fun FloatingMenu(
 private fun TranslationMode.label() = when (this) {
     TranslationMode.REGION -> R.string.mode_region
     TranslationMode.FIXED_REGION -> R.string.mode_fixed_region
+    TranslationMode.FULL_SCREEN -> R.string.mode_full_screen
 }
 
 @Composable

@@ -3,7 +3,9 @@ package com.deivide.webtoontranslator.floating
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,17 +29,24 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -57,7 +66,12 @@ import com.deivide.webtoontranslator.domain.model.Translation
 import com.deivide.webtoontranslator.ui.common.asString
 import com.deivide.webtoontranslator.ui.translation.TranslationCardActions
 import com.deivide.webtoontranslator.ui.translation.TranslationCardState
+import com.deivide.webtoontranslator.ui.translation.components.GlossSpan
+import com.deivide.webtoontranslator.ui.translation.components.GlossText
+import com.deivide.webtoontranslator.ui.translation.components.GlossTooltipHost
 import com.deivide.webtoontranslator.ui.translation.components.LearnSection
+import com.deivide.webtoontranslator.ui.translation.components.alignGloss
+import kotlin.math.abs
 import kotlinx.coroutines.flow.StateFlow
 
 // Cartão flutuante (LAYOUT.md §5.6): sempre escuro e translúcido, por cima de qualquer app.
@@ -99,28 +113,64 @@ internal fun FloatingTranslationCard(
     val current = state ?: return
     val translation = (current as? TranslationCardState.Done)?.translation
 
+    val scroll = rememberScrollState()
+    // Sem isso, texto sem cor explícita (gramática, trechos) sai escuro sobre o fundo escuro.
     MaterialTheme(colorScheme = FloatingColors) {
-        Column(
-            Modifier
-                .padding(horizontal = 8.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(CardBackground.copy(alpha = CARD_ALPHA))
-                .pointerInput(Unit) {
-                    detectDragGestures { change, amount ->
-                        change.consume()
-                        controls.onDrag(amount.x, amount.y)
+        CompositionLocalProvider(LocalContentColor provides TextPrimary) {
+            Column(
+                Modifier
+                    .padding(horizontal = 8.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(CardBackground.copy(alpha = CARD_ALPHA))
+                    .dragAnywhere(scroll, controls.onDrag)
+                    .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.5f)
+                    .padding(10.dp)
+            ) {
+                GlossTooltipHost {
+                    Column {
+                        Header(current, translation, translation != null && translation.id in lib.favoriteIds, opts, actions, controls)
+                        Column(Modifier.verticalScroll(scroll).padding(horizontal = 4.dp)) {
+                            Body(current, opts, actions)
+                        }
                     }
                 }
-                .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.5f)
-                .padding(10.dp)
-        ) {
-            Header(current, translation, translation != null && translation.id in lib.favoriteIds, opts, actions, controls)
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 4.dp)) {
-                Body(current, opts, actions)
             }
         }
     }
 }
+
+/**
+ * Arrastar em qualquer ponto move o cartão. Só quando o conteúdo tem mais do que cabe (ex.:
+ * Aprender aberto) o arrasto vertical fica pra rolagem; aí move na horizontal ou pelo cabeçalho.
+ * Os toques nos botões continuam funcionando (o gesto só é tomado depois que vira arrasto).
+ */
+private fun Modifier.dragAnywhere(scroll: ScrollState, onDrag: (Float, Float) -> Unit) = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var total = Offset.Zero
+        var dragging = false
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (!change.pressed) break
+            val delta = change.positionChange()
+            if (!dragging) {
+                total += delta
+                if (total.getDistance() < viewConfiguration.touchSlop) continue
+                val vertical = abs(total.y) > abs(total.x)
+                val scrollable = scroll.canScrollForward || scroll.canScrollBackward
+                // Gesto de rolagem do conteúdo: deixa a rolagem cuidar dele.
+                if (vertical && scrollable && !isInHeader(down.position.y)) break
+                dragging = true
+            }
+            change.consume()
+            onDrag(delta.x, delta.y)
+        }
+    }
+}
+
+/** O cabeçalho (fileira de botões) ocupa mais ou menos os primeiros 56 dp do cartão. */
+private fun PointerInputScope.isInHeader(y: Float) = y < 56.dp.toPx()
 
 @Composable
 private fun Header(
@@ -158,7 +208,7 @@ private fun Header(
                 active = isFavorite,
             ) { actions.onToggleFavorite(translation) }
         }
-        if (original.isNotBlank()) {
+        if (original.isNotBlank() && options.ipaEnabled) {
             CircleAction(label = "IPA", description = stringResource(R.string.cd_toggle_ipa), active = options.showIpa) {
                 actions.onOptionsChange { it.copy(showIpa = !it.showIpa) }
             }
@@ -182,16 +232,24 @@ private fun Header(
 private fun Body(state: TranslationCardState, options: ReadingOptions, actions: TranslationCardActions) {
     when (state) {
         TranslationCardState.Reading -> Loading(stringResource(R.string.result_reading))
-        is TranslationCardState.Failed -> Text(state.message.asString(), color = MaterialTheme.colorScheme.error)
+        is TranslationCardState.Failed -> {
+            Text(state.message.asString(), color = MaterialTheme.colorScheme.error)
+            val retry = actions.onRetry
+            if (state.retryable && retry != null) {
+                TextButton(onClick = retry, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(stringResource(R.string.action_retry), color = Accent)
+                }
+            }
+        }
         is TranslationCardState.Streaming -> {
             if (state.translation.isBlank()) Loading(stringResource(R.string.result_translating))
             else Text(state.translation, fontSize = 18.sp, color = TextPrimary)
-            Original(state.original, state.pronunciationPt, state.pronunciationIpa, options)
+            Original(state.original, emptyList(), state.pronunciationPt, state.pronunciationIpa, options)
         }
         is TranslationCardState.Done -> {
             val t = state.translation
             Text(t.translation, fontSize = 18.sp, color = TextPrimary)
-            Original(t.originalText, t.pronunciationPt, t.pronunciationIpa, options)
+            Original(t.originalText, alignGloss(t.originalText, t.gloss), t.pronunciationPt, t.pronunciationIpa, options)
             if (options.learnOpen) LearnSection(t, options.copy(learnOpen = true), actions, showToggle = false)
             Text(
                 stringResource(R.string.result_footer, t.model, t.durationSecs),
@@ -204,10 +262,10 @@ private fun Body(state: TranslationCardState, options: ReadingOptions, actions: 
 }
 
 @Composable
-private fun Original(text: String, pt: String, ipa: String, options: ReadingOptions) {
+private fun Original(text: String, gloss: List<GlossSpan>, pt: String, ipa: String, options: ReadingOptions) {
     if (text.isBlank()) return
-    Text(text, fontSize = 14.sp, color = TextPrimary.copy(alpha = 0.85f), modifier = Modifier.padding(top = 6.dp))
-    val pronunciation = if (options.showIpa && ipa.isNotBlank()) ipa else pt
+    GlossText(text, gloss, color = TextPrimary.copy(alpha = 0.85f), modifier = Modifier.padding(top = 6.dp))
+    val pronunciation = if (options.ipaEnabled && options.showIpa && ipa.isNotBlank()) ipa else pt
     if (pronunciation.isNotBlank()) {
         Text(stringResource(R.string.pronunciation, pronunciation), fontSize = 13.sp, color = TextSecondary)
     }

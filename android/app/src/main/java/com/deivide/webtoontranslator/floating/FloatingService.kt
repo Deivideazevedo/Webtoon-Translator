@@ -22,6 +22,7 @@ import com.deivide.webtoontranslator.MainActivity
 import com.deivide.webtoontranslator.R
 import com.deivide.webtoontranslator.WebtoonApp
 import com.deivide.webtoontranslator.data.settings.TranslationMode
+import com.deivide.webtoontranslator.domain.model.ScreenBlock
 import com.deivide.webtoontranslator.ui.common.resolve
 import com.deivide.webtoontranslator.ui.common.toUiText
 import com.deivide.webtoontranslator.ui.translation.TranslationCardActions
@@ -57,15 +58,19 @@ class FloatingService : Service(), FloatingIcon.Listener {
     private var cardParams: WindowManager.LayoutParams? = null
     private var menuOverlay: ComposeOverlay? = null
     private var hintOverlay: ComposeOverlay? = null
+    private var screenBlocks: ScreenBlocksOverlay? = null
 
     private val card = MutableStateFlow<TranslationCardState?>(null)
     private var translationJob: Job? = null
+    /** Refaz a última tradução do cartão ("Tentar de novo"). */
+    private var lastRun: (() -> Unit)? = null
 
     private var mode: TranslationMode = TranslationMode.REGION
         set(value) {
             field = value
             settings.translationMode = value
             icon?.tapArms = value == TranslationMode.REGION
+            screenBlocks?.remove()
         }
 
     private val cardActions by lazy {
@@ -75,6 +80,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
             onToggleFavorite = { scope.launch { actions.toggleFavorite(it) } },
             onOptionsChange = actions::updateOptions,
             onClose = ::closeCard,
+            onRetry = { lastRun?.invoke() },
         )
     }
 
@@ -115,6 +121,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
         }, mainHandler)
         capturer = ScreenCapturer(this, projection)
         selection = SelectionOverlay(this, windows)
+        screenBlocks = ScreenBlocksOverlay(this, windows, onOpen = ::openBlock, onDismiss = { screenBlocks?.remove() })
         icon = FloatingIcon(this, windows, this).also { it.show() }
         mode = settings.translationMode
         container.floatingStatus.set(true)
@@ -128,6 +135,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
         closeEditor()
         hintOverlay?.remove()
         cardOverlay?.remove()
+        screenBlocks?.remove()
         selection?.remove()
         icon?.remove()
         capturer?.release()
@@ -137,11 +145,16 @@ class FloatingService : Service(), FloatingIcon.Listener {
 
     // --- Ícone ---
 
-    /** Região fixa: traduz a área marcada (ou abre o editor se ainda não há área). */
+    /**
+     * Região fixa: traduz a área marcada (ou abre o editor se ainda não há área).
+     * Tela cheia: traduz a tela; se as traduções já estão na tela, tira elas.
+     */
     override fun onTap() {
         closeMenu()
-        val region = settings.fixedRegion
-        if (region == null) openEditor() else translateRegion(region)
+        when (mode) {
+            TranslationMode.FULL_SCREEN -> if (screenBlocks?.isShown == true) screenBlocks?.remove() else translateFullScreen()
+            else -> settings.fixedRegion?.let(::translateRegion) ?: openEditor()
+        }
     }
 
     override fun onArmed() {
@@ -183,14 +196,18 @@ class FloatingService : Service(), FloatingIcon.Listener {
     private fun selectMode(newMode: TranslationMode) {
         closeMenu()
         mode = newMode
-        if (newMode == TranslationMode.FIXED_REGION) {
-            if (settings.fixedRegion == null) openEditor() else showHint(R.string.fixed_region_hint)
+        when (newMode) {
+            TranslationMode.FIXED_REGION ->
+                if (settings.fixedRegion == null) openEditor() else showHint(R.string.fixed_region_hint)
+            TranslationMode.FULL_SCREEN -> showHint(R.string.full_screen_hint)
+            TranslationMode.REGION -> Unit
         }
     }
 
     // --- Tradução ---
 
     private fun translateRegion(region: Rect) {
+        lastRun = { translateRegion(region) }
         translationJob?.cancel()
         translationJob = scope.launch {
             val shot = captureWithoutOverlays() ?: return@launch
@@ -199,6 +216,40 @@ class FloatingService : Service(), FloatingIcon.Listener {
             val crop = Bitmap.createBitmap(shot, bounds.left, bounds.top, bounds.width(), bounds.height())
             showCard(region)
             container.regionTranslator.translate(crop).collect { card.value = it }
+        }
+    }
+
+    /** Tela cheia: acha os balões, traduz todos numa chamada e põe cada tradução em cima do seu. */
+    private fun translateFullScreen() {
+        translationJob?.cancel()
+        closeCard()
+        screenBlocks?.remove()
+        translationJob = scope.launch {
+            val shot = captureWithoutOverlays() ?: return@launch
+            showHint(R.string.full_screen_reading, autoHide = false)
+            val (statusBar, navigationBar) = systemBarHeights(this@FloatingService)
+            val result = try {
+                container.screenTranslator.translate(shot, statusBar, navigationBar)
+            } catch (e: Exception) {
+                ScreenTranslator.Result.Failed(e.toUiText())
+            } finally {
+                hintOverlay?.remove()
+                hintOverlay = null
+            }
+            when (result) {
+                is ScreenTranslator.Result.Blocks -> screenBlocks?.show(result.blocks, topLimit = statusBar)
+                is ScreenTranslator.Result.Failed -> toast(result.message.resolve(this@FloatingService))
+            }
+        }
+    }
+
+    /** Toque numa tradução da tela cheia: cartão completo (didático) daquele balão. */
+    private fun openBlock(block: ScreenBlock) {
+        lastRun = { openBlock(block) }
+        translationJob?.cancel()
+        translationJob = scope.launch {
+            showCard(Rect(block.left, block.top, block.right, block.bottom))
+            container.regionTranslator.translateText(block.text).collect { card.value = it }
         }
     }
 
@@ -287,7 +338,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
         menuOverlay = null
     }
 
-    private fun showHint(@StringRes text: Int) {
+    private fun showHint(@StringRes text: Int, autoHide: Boolean = true) {
         val anchor = icon?.position ?: return
         hintOverlay?.remove()
         val params = overlayParams(
@@ -298,7 +349,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
         ).apply { y = (anchor.top - HINT_OFFSET_PX).coerceAtLeast(0) }
         val hint = ComposeOverlay(this, windows) { FloatingHint(getString(text)) }.also { it.show(params) }
         hintOverlay = hint
-        scope.launch {
+        if (autoHide) scope.launch {
             delay(HINT_MS)
             if (hintOverlay === hint) {
                 hint.remove()
