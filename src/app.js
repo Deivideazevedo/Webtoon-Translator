@@ -112,7 +112,7 @@ let recordingShortcut = false;
 
 shortcutBtn.addEventListener("click", () => {
   recordingShortcut = true;
-  shortcutBtn.textContent = "Pressione a combinação...";
+  shortcutBtn.textContent = "Pressione a combinação… (Esc cancela)";
   shortcutBtn.disabled = true;
 });
 
@@ -122,11 +122,23 @@ const SHORTCUT_KEY_MAP = {
   ArrowDown: "Down",
   ArrowLeft: "Left",
   ArrowRight: "Right",
-  Escape: "Escape",
 };
+
+async function restoreShortcutLabel() {
+  const settings = await invoke("load_settings").catch(() => null);
+  shortcutBtn.textContent = (settings && settings.shortcut) || "CommandOrControl+Shift+T";
+}
 
 document.addEventListener("keydown", async (e) => {
   if (!recordingShortcut) return;
+  // Esc cancela a gravação (antes ele virava o próprio atalho).
+  if (e.key === "Escape") {
+    e.preventDefault();
+    recordingShortcut = false;
+    shortcutBtn.disabled = false;
+    setStatus(shortcutStatus, "Gravação cancelada; o atalho continua o mesmo.", "");
+    return restoreShortcutLabel();
+  }
   if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
   e.preventDefault();
 
@@ -147,8 +159,7 @@ document.addEventListener("keydown", async (e) => {
     setStatus(shortcutStatus, "Atalho salvo.", "ok");
   } catch (err) {
     setStatus(shortcutStatus, friendlyError(err), "error");
-    const settings = await invoke("load_settings").catch(() => null);
-    shortcutBtn.textContent = (settings && settings.shortcut) || "CommandOrControl+Shift+T";
+    restoreShortcutLabel();
   }
 });
 

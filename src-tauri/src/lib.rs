@@ -883,6 +883,43 @@ fn set_shortcut(app: tauri::AppHandle, accelerator: String) -> Result<(), String
     save_settings(app, settings)
 }
 
+/// Traz o painel de volta (escondido na bandeja, minimizado ou atrás de outras janelas).
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
+
+/// Ícone na bandeja: com o painel fechado e o balão aberto, é por ele que o painel volta.
+fn create_tray(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let open = MenuItem::with_id(app, "open", "Abrir painel", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
+    let mut tray = TrayIconBuilder::with_id("main")
+        .tooltip("Webtoon Translator")
+        .menu(&Menu::with_items(app, &[&open, &quit])?)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "open" => show_main_window(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        // Clique esquerdo abre o painel (no Linux o clique sempre abre o menu acima).
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                show_main_window(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
 #[tauri::command]
 fn begin_capture(app: tauri::AppHandle) -> Result<(), String> {
     if app.get_webview_window("capture-overlay").is_some() {
@@ -1603,14 +1640,36 @@ pub fn run() {
             select_voice_speaker,
             set_speech_mode,
         ])
+        // Abrir o app de novo só traz o painel que já está rodando (um painel, um balão).
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| {
-            // Balão fechado: nenhuma tradução fica marcada como ativa na lista.
-            if window.label() == "bubble" && matches!(event, tauri::WindowEvent::Destroyed) {
-                let app = window.app_handle();
-                *app.state::<BubbleState>().0.lock().unwrap() = None;
-                let _ = app.emit_to("main", "bubble-changed", ());
+            let app = window.app_handle();
+            match (window.label(), event) {
+                // Fechar o painel com o balão aberto só esconde o painel (fica na bandeja);
+                // sem balão, encerra o app.
+                ("main", tauri::WindowEvent::CloseRequested { api, .. }) => {
+                    if app.get_webview_window("bubble").is_some() {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    } else {
+                        app.exit(0);
+                    }
+                }
+                ("bubble", tauri::WindowEvent::Destroyed) => {
+                    // Balão fechado: nenhuma tradução fica marcada como ativa na lista.
+                    *app.state::<BubbleState>().0.lock().unwrap() = None;
+                    let _ = app.emit_to("main", "bubble-changed", ());
+                    // Era a última janela visível (painel na bandeja, sem captura em andamento).
+                    let main_visible = app
+                        .get_webview_window("main")
+                        .is_some_and(|w| w.is_visible().unwrap_or(true));
+                    if !main_visible && app.get_webview_window("capture-overlay").is_none() {
+                        app.exit(0);
+                    }
+                }
+                _ => {}
             }
         })
         .setup(|app| {
@@ -1630,6 +1689,9 @@ pub fn run() {
                 if let Ok(mut selected) = SELECTED_VOICE.lock() {
                     *selected = settings.voice;
                 }
+            }
+            if let Err(e) = create_tray(app) {
+                eprintln!("Falha ao criar o ícone da bandeja: {e}");
             }
             let handle = app.handle().clone();
             if let Ok(settings) = load_settings(handle.clone()) {
