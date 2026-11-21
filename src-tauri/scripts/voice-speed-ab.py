@@ -8,8 +8,8 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("WebKit2", "4.1")
 from gi.repository import Gtk, WebKit2  # noqa: E402
 
-win = Gtk.Window(title=sys.argv[2] if len(sys.argv) > 2 else "Comparativo de voz")
-win.set_default_size(1040, 720)
+win = Gtk.Window(title="Velocidade da voz: nativo vs playbackRate")
+win.set_default_size(760, 560)
 win.connect("destroy", Gtk.main_quit)
 view = WebKit2.WebView()
 settings = view.get_settings()
