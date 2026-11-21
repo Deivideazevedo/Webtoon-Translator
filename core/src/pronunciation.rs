@@ -297,7 +297,7 @@ mod tests {
     use super::*;
 
     fn lex_path() -> std::path::PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tts-models").join("lexicon-en-us.txt")
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../src-tauri/tts-models/lexicon-en-us.txt")
     }
 
     #[test]

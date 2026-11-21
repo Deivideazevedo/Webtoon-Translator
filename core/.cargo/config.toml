@@ -1,0 +1,3 @@
+# Mesma pasta de build do app desktop: as dependências em comum compilam uma vez só.
+[build]
+target-dir = "../src-tauri/target"

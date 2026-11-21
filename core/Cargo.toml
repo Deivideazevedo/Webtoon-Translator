@@ -1,0 +1,26 @@
+[package]
+name = "webtoon-core"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Núcleo compartilhado (desktop e Android): OCR, tradução com streaming, pronúncia e voz"
+
+[features]
+default = ["kokoro"]
+# Voz Kokoro via sherpa-onnx. No Android ela é um download opcional, então dá pra compilar sem.
+kokoro = ["dep:sherpa-onnx"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# rustls em vez do OpenSSL do sistema: compila igual no Linux, Windows e Android.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "charset"] }
+tokio = { version = "1", features = ["time"] }
+base64 = "0.22"
+ocrs = "0.14"
+rten = "0.28"
+sherpa-onnx = { version = "2.0.2", default-features = false, features = ["static"], optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+image = "0.25"

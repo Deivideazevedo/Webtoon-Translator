@@ -1,7 +1,12 @@
-mod pronunciation;
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use webtoon_core::audio::wav_data_url;
+use webtoon_core::ocr::OcrEngine;
+use webtoon_core::pronunciation;
+use webtoon_core::text::*;
+use webtoon_core::translate::*;
+use webtoon_core::tts::OfflineTts;
 use std::fs;
 use tauri::{Emitter, Manager};
 
@@ -75,7 +80,7 @@ fn perf_log(app: &tauri::AppHandle, session: &str, event: &str, extra: serde_jso
     }
 }
 
-struct TtsState(std::sync::Mutex<Option<sherpa_onnx::OfflineTts>>);
+struct TtsState(std::sync::Mutex<Option<OfflineTts>>);
 
 /// Pasta onde o instalador coloca os modelos (voz, OCR, dicionário). Definida no setup a
 /// partir do resource_dir do Tauri; nos testes, a pasta do código-fonte.
@@ -92,40 +97,10 @@ fn tts_models_dir() -> std::path::PathBuf {
     resources_dir().join("tts-models")
 }
 
-fn create_tts() -> Result<sherpa_onnx::OfflineTts, String> {
-    let base = tts_models_dir();
-    let voice_dir = base.join("kokoro-en-v0_19");
-    let config = sherpa_onnx::OfflineTtsConfig {
-        model: sherpa_onnx::OfflineTtsModelConfig {
-            kokoro: sherpa_onnx::OfflineTtsKokoroModelConfig {
-                model: Some(voice_dir.join("model.onnx").to_string_lossy().into_owned()),
-                voices: Some(voice_dir.join("voices.bin").to_string_lossy().into_owned()),
-                tokens: Some(voice_dir.join("tokens.txt").to_string_lossy().into_owned()),
-                lexicon: Some(base.join("lexicon-en-us.txt").to_string_lossy().into_owned()),
-                length_scale: 1.0,
-                ..Default::default()
-            },
-            num_threads: std::thread::available_parallelism()
-                .map(|n| n.get() as i32)
-                .unwrap_or(2),
-            debug: false,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    sherpa_onnx::OfflineTts::create(&config)
-        .ok_or_else(|| "Não consegui carregar o modelo de voz (Kokoro).".to_string())
-}
-
 /// Áudios já gerados (data URL), em ordem de uso: repetir um clique ou tocar algo que foi
 /// pré-gerado não sintetiza de novo. Limitado pra não virar mais um acúmulo de RAM.
 struct TtsCache(std::sync::Mutex<std::collections::VecDeque<(String, String)>>);
 const TTS_CACHE_MAX: usize = 20;
-
-/// Caixa alta não muda o áudio do Kokoro (medido), então a chave ignora maiúsculas/espaços.
-fn normalize_for_speech(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
-}
 
 fn tts_cache_key(text: &str, speed: f32) -> String {
     format!("{speed:.2}|{}", normalize_for_speech(text))
@@ -152,37 +127,12 @@ fn tts_cache_put(app: &tauri::AppHandle, key: String, url: String) {
     };
 }
 
-/// WAV PCM 16-bit montado em memória (antes era salvo num arquivo temporário e relido do disco).
-fn wav_data_url(samples: &[f32], sample_rate: u32) -> String {
-    let data_len = (samples.len() * 2) as u32;
-    let mut bytes = Vec::with_capacity(44 + data_len as usize);
-    bytes.extend_from_slice(b"RIFF");
-    bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
-    bytes.extend_from_slice(b"WAVEfmt ");
-    bytes.extend_from_slice(&16u32.to_le_bytes());
-    bytes.extend_from_slice(&1u16.to_le_bytes()); // PCM
-    bytes.extend_from_slice(&1u16.to_le_bytes()); // mono
-    bytes.extend_from_slice(&sample_rate.to_le_bytes());
-    bytes.extend_from_slice(&(sample_rate * 2).to_le_bytes());
-    bytes.extend_from_slice(&2u16.to_le_bytes());
-    bytes.extend_from_slice(&16u16.to_le_bytes());
-    bytes.extend_from_slice(b"data");
-    bytes.extend_from_slice(&data_len.to_le_bytes());
-    for s in samples {
-        bytes.extend_from_slice(&((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
-    }
-    format!(
-        "data:audio/wav;base64,{}",
-        base64::engine::general_purpose::STANDARD.encode(&bytes)
-    )
-}
-
 /// O Kokoro sempre gera em 1.0 e o balão desacelera no player (playbackRate, mantendo o tom):
 /// gerar devagar custa ~35-45% mais CPU porque produz mais segundos de áudio, e no A/B de
 /// ouvido a diferença foi mínima. Bônus: mudar a velocidade não invalida o cache.
 const TTS_SYNTH_SPEED: f32 = 1.0;
 
-fn load_tts_engine(app: &tauri::AppHandle, guard: &mut Option<sherpa_onnx::OfflineTts>, session: &str) -> Result<(), String> {
+fn load_tts_engine(app: &tauri::AppHandle, guard: &mut Option<OfflineTts>, session: &str) -> Result<(), String> {
     if guard.is_none() {
         let started = std::time::Instant::now();
         *guard = Some(create_tts()?);
@@ -232,15 +182,8 @@ fn synthesize_speech(app: &tauri::AppHandle, text: &str, session: &str) -> Resul
     load_tts_engine(app, &mut guard, session)?;
     let tts = guard.as_ref().unwrap();
 
-    let gen_config = sherpa_onnx::GenerationConfig {
-        sid: 0,
-        speed,
-        ..Default::default()
-    };
-    let audio = tts
-        .generate_with_config(text, &gen_config, None::<fn(&[f32], f32) -> bool>)
-        .ok_or_else(|| "Falha ao gerar áudio".to_string())?;
-    let url = wav_data_url(audio.samples(), audio.sample_rate() as u32);
+    let (samples, sample_rate) = webtoon_core::tts::synthesize(tts, text, speed)?;
+    let url = wav_data_url(&samples, sample_rate);
     tts_cache_put(app, key, url.clone());
     if is_favorite_text(app, text) {
         save_favorite_audio(app, text, &url);
@@ -252,12 +195,6 @@ fn synthesize_speech(app: &tauri::AppHandle, text: &str, session: &str) -> Resul
 // Um .wav por TEXTO falado (não por favorito): a mesma frase favoritada em dois modelos
 // compartilha o arquivo, e ele só é apagado quando nenhum favorito usa mais aquele texto.
 
-/// FNV-1a 64: hash estável entre versões do Rust (o DefaultHasher não garante isso), pra o
-/// nome do arquivo continuar o mesmo depois de atualizar o app.
-fn fnv1a64(text: &str) -> u64 {
-    text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3))
-}
-
 fn favorite_audio_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     let dir = data_file(app, "favorite_audio")?;
     fs::create_dir_all(&dir).map_err(|e| format!("Não consegui criar a pasta de áudios: {e}"))?;
@@ -266,14 +203,6 @@ fn favorite_audio_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, Stri
 
 fn favorite_audio_name(text: &str) -> String {
     format!("{:016x}.wav", fnv1a64(&tts_cache_key(text, TTS_SYNTH_SPEED)))
-}
-
-/// Textos que viram áudio numa tradução: a frase original e cada trecho do breakdown.
-fn speech_texts(t: &TranslationResult) -> Vec<String> {
-    std::iter::once(t.original_text.clone())
-        .chain(t.breakdown.iter().map(|b| b.segment.clone()))
-        .filter(|s| !s.trim().is_empty())
-        .collect()
 }
 
 fn read_favorite_audio(app: &tauri::AppHandle, text: &str) -> Option<String> {
@@ -405,24 +334,19 @@ async fn speak_text(text: String, app: tauri::AppHandle) -> Result<String, Strin
     result
 }
 
-struct OcrState(std::sync::Mutex<Option<ocrs::OcrEngine>>);
+struct OcrState(std::sync::Mutex<Option<OcrEngine>>);
 
 fn ocr_models_dir() -> std::path::PathBuf {
     resources_dir().join("ocr-models")
 }
 
-fn create_ocr_engine() -> Result<ocrs::OcrEngine, String> {
-    let base = ocr_models_dir();
-    let detection_model = rten::Model::load_file(base.join("text-detection.onnx"))
-        .map_err(|e| format!("Falha ao carregar modelo de detecção de texto: {e}"))?;
-    let recognition_model = rten::Model::load_file(base.join("text-recognition.onnx"))
-        .map_err(|e| format!("Falha ao carregar modelo de reconhecimento de texto: {e}"))?;
-    ocrs::OcrEngine::new(ocrs::OcrEngineParams {
-        detection_model: Some(detection_model),
-        recognition_model: Some(recognition_model),
-        ..Default::default()
-    })
-    .map_err(|e| format!("Falha ao iniciar o OCR: {e}"))
+fn create_ocr_engine() -> Result<OcrEngine, String> {
+    webtoon_core::ocr::load_engine(&ocr_models_dir())
+}
+
+fn create_tts() -> Result<OfflineTts, String> {
+    let base = tts_models_dir();
+    webtoon_core::tts::create_kokoro(&base.join("kokoro-en-v0_19"), &base.join("lexicon-en-us.txt"))
 }
 
 fn run_ocr(app: &tauri::AppHandle, image: &image::RgbaImage) -> Result<String, String> {
@@ -434,56 +358,7 @@ fn run_ocr(app: &tauri::AppHandle, image: &image::RgbaImage) -> Result<String, S
     let engine = guard.as_ref().unwrap();
 
     let rgb = image::DynamicImage::ImageRgba8(image.clone()).into_rgb8();
-    let img_source = ocrs::ImageSource::from_bytes(rgb.as_raw(), rgb.dimensions())
-        .map_err(|e| format!("Falha ao preparar imagem pro OCR: {e}"))?;
-    let ocr_input = engine
-        .prepare_input(img_source)
-        .map_err(|e| format!("Falha ao processar imagem pro OCR: {e}"))?;
-    let text = engine
-        .get_text(&ocr_input)
-        .map_err(|e| format!("Falha ao extrair texto: {e}"))?;
-
-    // Filtra detecções espúrias (letras soltas nas bordas de balões), igual o
-    // próprio exemplo oficial do ocrs recomenda.
-    let cleaned: String = text
-        .lines()
-        .filter(|l| l.trim().chars().count() > 1)
-        .collect::<Vec<_>>()
-        .join("\n");
-    Ok(cleaned)
-}
-
-/// A pronúncia NÃO vem do modelo: é calculada localmente (pronunciation.rs) a partir do
-/// dicionário do Kokoro — mais consistente e menos tokens de saída pra esperar.
-const SYSTEM_PROMPT: &str = "Você é um professor de inglês para falantes de português brasileiro que leem \
-webtoons. Você recebe um texto em inglês extraído por OCR (pode ter ruído: letras soltas, pontuação estranha, \
-palavras levemente erradas). Reconstrua o texto mais provável e responda SOMENTE com JSON válido, sem markdown, \
-nesta ordem exata de campos:\n\
-{\"original_text\": \"...\", \"translation\": \"...\", \"breakdown\": [{\"segment\": \"...\", \"meaning\": \"...\", \
-\"note\": \"...\"}], \"grammar_notes\": \"...\", \"gloss\": [[\"palavra\", \"tradução literal\"]]}\n\n\
-Regras:\n\
-- original_text e translation em sentence case (nunca copie a caixa alta do quadrinho). Separe balões com \"\\n\".\n\
-- translation: português brasileiro natural, preservando a nuance (gíria, intensidade, tom).\n\
-- breakdown: de 1 a 3 trechos. Priorize phrasal verbs e expressões cujo sentido muda em relação às palavras \
-soltas (ex.: \"go down\" é literalmente \"descer/cair\", mas em \"go down without a fight\" é \"se render\"); \
-depois gírias, armadilhas gramaticais e falsos cognatos. Nunca repita a frase inteira como trecho. segment deve \
-aparecer exatamente assim em original_text.\n\
-- meaning: o sentido do trecho neste contexto. note: no máximo 1 frase; quando o sentido não for literal, comece \
-com \"Literal: … → aqui: …\"; sem especular sobre história ou personagens.\n\
-- grammar_notes: no máximo 1 frase.\n\
-- gloss: tradução literal, palavra por palavra, de CADA palavra de original_text na ordem (sem pontuação), com o \
-sentido que ela tem nesta frase. Contrações viram 1 item (\"let's\" = \"vamos\"). Pode ficar estranho em português, \
-é de propósito.\n\
-- Se não houver inglês legível, retorne original_text e translation vazios e explique em grammar_notes.";
-
-/// Teto de segurança contra geração descontrolada. As respostas reais ficam em ~100-700 tokens,
-/// então isso nunca corta uma resposta normal (cortar no meio quebraria o JSON).
-const MAX_OUTPUT_TOKENS: u32 = 4096;
-
-/// Um client só pro app inteiro: reaproveita conexões (keep-alive/TLS) entre chamadas.
-fn http() -> &'static reqwest::Client {
-    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
-    CLIENT.get_or_init(reqwest::Client::new)
+    webtoon_core::ocr::recognize_text(engine, rgb.as_raw(), rgb.width(), rgb.height())
 }
 
 const DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+T";
@@ -570,81 +445,6 @@ impl Default for Settings {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct ModelEntry {
-    id: String,
-    #[serde(default)]
-    owned_by: Option<String>,
-    #[serde(default)]
-    capabilities: Option<serde_json::Value>,
-}
-
-#[derive(Deserialize)]
-struct ModelsResponse {
-    data: Vec<ModelEntry>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-struct BreakdownItem {
-    #[serde(default)]
-    segment: String,
-    #[serde(default)]
-    pronunciation_pt: String,
-    #[serde(default)]
-    pronunciation_ipa: String,
-    #[serde(default)]
-    meaning: String,
-    #[serde(default)]
-    note: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-struct TranslationResult {
-    #[serde(default)]
-    original_text: String,
-    #[serde(default)]
-    translation: String,
-    #[serde(default)]
-    pronunciation_pt: String,
-    #[serde(default)]
-    pronunciation_ipa: String,
-    #[serde(default)]
-    breakdown: Vec<BreakdownItem>,
-    #[serde(default)]
-    grammar_notes: String,
-    #[serde(default)]
-    duration_secs: f64,
-    #[serde(default)]
-    model: String,
-    /// true enquanto a resposta ainda está chegando (o balão mostra o que já tem + skeleton).
-    #[serde(default)]
-    pending: bool,
-    /// Epoch ms da captura: identifica a tradução nos recentes/favoritos e ordena por data.
-    #[serde(default)]
-    id: String,
-    /// [palavra, tradução literal] na ordem de original_text, pro hover no balão.
-    #[serde(default, deserialize_with = "lenient_gloss")]
-    gloss: Vec<(String, String)>,
-}
-
-/// A glosa é um extra: se o modelo devolver num formato inesperado, ela é descartada
-/// em vez de derrubar o parse da tradução inteira.
-fn lenient_gloss<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<(String, String)>, D::Error> {
-    let value = serde_json::Value::deserialize(d)?;
-    Ok(value
-        .as_array()
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(|pair| {
-                    let pair = pair.as_array()?;
-                    Some((pair.first()?.as_str()?.to_string(), pair.get(1)?.as_str()?.to_string()))
-                })
-                .collect()
-        })
-        .unwrap_or_default())
-}
-
 struct BubbleState(std::sync::Mutex<Option<TranslationResult>>);
 
 #[tauri::command]
@@ -664,20 +464,6 @@ fn update_bubble(app: &tauri::AppHandle, result: &TranslationResult) {
 
 fn lexicon_path() -> std::path::PathBuf {
     tts_models_dir().join("lexicon-en-us.txt")
-}
-
-fn fill_pronunciations(result: &mut TranslationResult) {
-    let path = lexicon_path();
-    if let Some(p) = pronunciation::pronounce(&path, &result.original_text) {
-        result.pronunciation_pt = p.ptbr;
-        result.pronunciation_ipa = p.ipa;
-    }
-    for item in &mut result.breakdown {
-        if let Some(p) = pronunciation::pronounce(&path, &item.segment) {
-            item.pronunciation_pt = p.ptbr;
-            item.pronunciation_ipa = p.ipa;
-        }
-    }
 }
 
 fn settings_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
@@ -737,80 +523,6 @@ fn delete_api_key(provider: String) -> Result<(), String> {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
-}
-
-const ANTHROPIC_VERSION: &str = "2023-06-01";
-
-#[tauri::command]
-async fn list_models(
-    base_url: String,
-    api_key: String,
-    provider: Option<String>,
-) -> Result<Vec<ModelEntry>, String> {
-    let client = http();
-
-    if provider.as_deref() == Some("google") {
-        let url = format!("{}/v1beta/models", base_url.trim_end_matches('/'));
-        let response = client
-            .get(&url)
-            .header("x-goog-api-key", api_key)
-            .send()
-            .await
-            .map_err(|e| format!("Falha ao conectar em {url}: {e}"))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(format!("API do Google respondeu {status}: {body}"));
-        }
-
-        let body: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
-        let entries = body["models"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|m| {
-                let name = m["name"].as_str()?;
-                let id = name.strip_prefix("models/").unwrap_or(name).to_string();
-                Some(ModelEntry {
-                    id,
-                    owned_by: None,
-                    capabilities: None,
-                })
-            })
-            .collect();
-        return Ok(entries);
-    }
-
-    let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
-    let is_anthropic = provider.as_deref() == Some("anthropic");
-
-    let request = if is_anthropic {
-        client
-            .get(&url)
-            .header("x-api-key", api_key)
-            .header("anthropic-version", ANTHROPIC_VERSION)
-    } else {
-        client.get(&url).bearer_auth(api_key)
-    };
-
-    let response = request
-        .send()
-        .await
-        .map_err(|e| format!("Falha ao conectar em {url}: {e}"))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Gateway respondeu {status}: {body}"));
-    }
-
-    let parsed: ModelsResponse = response
-        .json()
-        .await
-        .map_err(|e| format!("Resposta inesperada do gateway: {e}"))?;
-    Ok(parsed.data)
 }
 
 /// Caixa delimitadora (em coordenadas absolutas da área de trabalho virtual) que cobre todos os monitores.
@@ -942,395 +654,10 @@ fn begin_capture(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn parse_translation_json(raw: &str) -> Result<TranslationResult, String> {
-    if let Ok(v) = serde_json::from_str::<TranslationResult>(raw) {
-        return Ok(v);
-    }
-    if let (Some(start), Some(end)) = (raw.find('{'), raw.rfind('}')) {
-        if end > start {
-            if let Ok(v) = serde_json::from_str::<TranslationResult>(&raw[start..=end]) {
-                return Ok(v);
-            }
-        }
-    }
-    Err(format!("Não consegui interpretar a resposta do modelo: {raw}"))
-}
-
-async fn call_omniroute_text(
-    extracted_text: &str,
-    api_key: &str,
-    base_url: &str,
-    model: &str,
-) -> Result<String, String> {
-    let url = format!("{}/v1/chat/completions", base_url.trim_end_matches('/'));
-    let client = http();
-    let user_message = format!(
-        "Texto extraído por OCR de uma captura de tela de webtoon:\n\n{extracted_text}"
-    );
-    let payload = serde_json::json!({
-        "model": model,
-        "max_tokens": MAX_OUTPUT_TOKENS,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message}
-        ]
-    });
-    let response = client
-        .post(&url)
-        .bearer_auth(api_key)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| format!("Falha ao conectar em {url}: {e}"))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Gateway respondeu {status}: {body}"));
-    }
-
-    let body: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
-    body["choices"][0]["message"]["content"]
-        .as_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| "Resposta do gateway sem conteúdo".to_string())
-}
-
-enum StreamEvent {
-    FirstToken,
-    /// Um campo string do JSON acabou de fechar (valor já sem escapes).
-    Field(&'static str, String),
-}
-
-/// Valor de `"campo": "..."` se a string já fechou no texto parcial; None se ainda está chegando.
-fn closed_string_field(partial: &str, field: &str) -> Option<String> {
-    let key = format!("\"{field}\"");
-    let after_key = &partial[partial.find(&key)? + key.len()..];
-    let after_colon = &after_key[after_key.find(':')? + 1..];
-    let open = after_colon.find('"')?;
-    if !after_colon[..open].trim().is_empty() {
-        return None;
-    }
-    let mut escaped = false;
-    for (i, c) in after_colon[open + 1..].char_indices() {
-        if escaped {
-            escaped = false;
-        } else if c == '\\' {
-            escaped = true;
-        } else if c == '"' {
-            return serde_json::from_str(&after_colon[open..open + 1 + i + 1]).ok();
-        }
-    }
-    None
-}
-
-const STREAMED_FIELDS: [&str; 2] = ["original_text", "translation"];
-
-/// Formato da API de cada provedor (o streaming muda só na requisição e em como ler cada pedaço).
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum Wire {
-    OpenAi,
-    Anthropic,
-    Google,
-}
-
-impl Wire {
-    fn from_provider(provider: &str) -> Wire {
-        match provider {
-            "anthropic" => Wire::Anthropic,
-            "google" => Wire::Google,
-            _ => Wire::OpenAi,
-        }
-    }
-}
-
-/// Texto novo que chegou num evento do streaming (None se o evento não traz texto).
-fn stream_delta(wire: Wire, event: &serde_json::Value) -> Option<String> {
-    match wire {
-        Wire::OpenAi => event["choices"][0]["delta"]["content"].as_str().map(str::to_string),
-        // content_block_delta/text_delta; os outros eventos (message_start, ping...) não têm texto.
-        Wire::Anthropic => (event["type"] == "content_block_delta" && event["delta"]["type"] == "text_delta")
-            .then(|| event["delta"]["text"].as_str().map(str::to_string))
-            .flatten(),
-        // Partes marcadas como "thought" são o raciocínio interno do Gemini, não a resposta.
-        Wire::Google => {
-            let parts = event["candidates"][0]["content"]["parts"].as_array()?;
-            let text: String = parts
-                .iter()
-                .filter(|p| p["thought"] != true)
-                .filter_map(|p| p["text"].as_str())
-                .collect();
-            (!text.is_empty()).then_some(text)
-        }
-    }
-}
-
-fn stream_out_tokens(wire: Wire, event: &serde_json::Value) -> Option<u64> {
-    match wire {
-        Wire::OpenAi => event["usage"]["completion_tokens"].as_u64(),
-        Wire::Anthropic => event["usage"]["output_tokens"].as_u64(),
-        Wire::Google => event["usageMetadata"]["candidatesTokenCount"].as_u64(),
-    }
-}
-
-/// Resposta inteira de uma vez (gateway que ignora `stream`).
-fn full_response_text(wire: Wire, body: &serde_json::Value) -> Option<String> {
-    match wire {
-        Wire::OpenAi => body["choices"][0]["message"]["content"].as_str().map(str::to_string),
-        Wire::Anthropic => body["content"][0]["text"].as_str().map(str::to_string),
-        Wire::Google => stream_delta(Wire::Google, body),
-    }
-}
-
-/// Tradução com streaming nos 3 provedores: avisa `on_event` quando o primeiro token chega e
-/// assim que original_text/translation fecham no JSON; devolve o texto completo + tokens de saída.
-async fn stream_translation(
-    wire: Wire,
-    extracted_text: &str,
-    api_key: &str,
-    base_url: &str,
-    model: &str,
-    on_event: &mut (dyn FnMut(StreamEvent) + Send),
-) -> Result<(String, Option<u64>), String> {
-    let base = base_url.trim_end_matches('/');
-    let user_message = format!(
-        "Texto extraído por OCR de uma captura de tela de webtoon:\n\n{extracted_text}"
-    );
-    let (url, request) = match wire {
-        Wire::OpenAi => {
-            let url = format!("{base}/v1/chat/completions");
-            let req = http().post(&url).bearer_auth(api_key).json(&serde_json::json!({
-                "model": model,
-                "max_tokens": MAX_OUTPUT_TOKENS,
-                "stream": true,
-                "stream_options": {"include_usage": true},
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message}
-                ]
-            }));
-            (url, req)
-        }
-        Wire::Anthropic => {
-            let url = format!("{base}/v1/messages");
-            let req = http()
-                .post(&url)
-                .header("x-api-key", api_key)
-                .header("anthropic-version", ANTHROPIC_VERSION)
-                .json(&serde_json::json!({
-                    "model": model,
-                    "max_tokens": MAX_OUTPUT_TOKENS,
-                    "stream": true,
-                    "system": SYSTEM_PROMPT,
-                    "messages": [{"role": "user", "content": user_message}]
-                }));
-            (url, req)
-        }
-        Wire::Google => {
-            let url = format!("{base}/v1beta/models/{model}:streamGenerateContent?alt=sse");
-            let req = http().post(&url).header("x-goog-api-key", api_key).json(&serde_json::json!({
-                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-                "contents": [{"role": "user", "parts": [{"text": user_message}]}],
-                "generationConfig": {"maxOutputTokens": MAX_OUTPUT_TOKENS}
-            }));
-            (url, req)
-        }
-    };
-
-    let mut response = request
-        .send()
-        .await
-        .map_err(|e| format!("Falha ao conectar em {url}: {e}"))?;
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("A API respondeu {status}: {body}"));
-    }
-
-    let mut pending: Vec<u8> = Vec::new();
-    let mut not_sse = String::new();
-    let mut content = String::new();
-    let mut out_tokens = None;
-    let mut sent = [false; STREAMED_FIELDS.len()];
-
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|e| format!("Conexão caiu no meio da resposta: {e}"))?
-    {
-        pending.extend_from_slice(&chunk);
-        // Só processa linhas completas: um caractere UTF-8 pode vir partido entre chunks.
-        while let Some(nl) = pending.iter().position(|&b| b == b'\n') {
-            let line_bytes: Vec<u8> = pending.drain(..=nl).collect();
-            let line = String::from_utf8_lossy(&line_bytes);
-            let line = line.trim();
-            let Some(data) = line.strip_prefix("data:") else {
-                // "event: ..." (Anthropic) e ": comentário" fazem parte do SSE; o resto é
-                // resposta sem streaming, guardada pro fallback lá embaixo.
-                if !line.is_empty() && !line.starts_with("event:") && !line.starts_with(':') {
-                    not_sse.push_str(line);
-                }
-                continue;
-            };
-            let data = data.trim();
-            if data == "[DONE]" {
-                continue;
-            }
-            let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else {
-                continue;
-            };
-            if let Some(err) = event.get("error") {
-                return Err(format!("A API respondeu erro no meio da resposta: {err}"));
-            }
-            if let Some(n) = stream_out_tokens(wire, &event) {
-                out_tokens = Some(n);
-            }
-            if let Some(delta) = stream_delta(wire, &event) {
-                if content.is_empty() && !delta.is_empty() {
-                    on_event(StreamEvent::FirstToken);
-                }
-                content.push_str(&delta);
-                for (i, field) in STREAMED_FIELDS.iter().enumerate() {
-                    if !sent[i] {
-                        if let Some(value) = closed_string_field(&content, field) {
-                            sent[i] = true;
-                            on_event(StreamEvent::Field(field, value));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if content.is_empty() {
-        not_sse.push_str(&String::from_utf8_lossy(&pending));
-        let body: serde_json::Value = serde_json::from_str(&not_sse)
-            .map_err(|_| format!("Resposta inesperada da API: {not_sse}"))?;
-        let text = full_response_text(wire, &body).ok_or_else(|| "Resposta da API sem conteúdo".to_string())?;
-        return Ok((text, None));
-    }
-    Ok((content, out_tokens))
-}
-
-async fn call_anthropic_text(
-    extracted_text: &str,
-    api_key: &str,
-    base_url: &str,
-    model: &str,
-) -> Result<String, String> {
-    let url = format!("{}/v1/messages", base_url.trim_end_matches('/'));
-    let client = http();
-    let user_message = format!(
-        "Texto extraído por OCR de uma captura de tela de webtoon:\n\n{extracted_text}"
-    );
-    let payload = serde_json::json!({
-        "model": model,
-        "max_tokens": MAX_OUTPUT_TOKENS,
-        "system": SYSTEM_PROMPT,
-        "messages": [
-            {"role": "user", "content": user_message}
-        ]
-    });
-    let response = client
-        .post(&url)
-        .header("x-api-key", api_key)
-        .header("anthropic-version", ANTHROPIC_VERSION)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| format!("Falha ao conectar em {url}: {e}"))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("API da Anthropic respondeu {status}: {body}"));
-    }
-
-    let body: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
-    body["content"][0]["text"]
-        .as_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| "Resposta da Anthropic sem conteúdo".to_string())
-}
-
-async fn call_google_text(
-    extracted_text: &str,
-    api_key: &str,
-    base_url: &str,
-    model: &str,
-) -> Result<String, String> {
-    let url = format!(
-        "{}/v1beta/models/{}:generateContent",
-        base_url.trim_end_matches('/'),
-        model
-    );
-    let client = http();
-    let user_message = format!(
-        "Texto extraído por OCR de uma captura de tela de webtoon:\n\n{extracted_text}"
-    );
-    let payload = serde_json::json!({
-        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-        "contents": [{"role": "user", "parts": [{"text": user_message}]}],
-        "generationConfig": {"maxOutputTokens": MAX_OUTPUT_TOKENS}
-    });
-    let response = client
-        .post(&url)
-        .header("x-goog-api-key", api_key)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| format!("Falha ao conectar em {url}: {e}"))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("API do Google respondeu {status}: {body}"));
-    }
-
-    let body: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
-    body["candidates"][0]["content"]["parts"][0]["text"]
-        .as_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| "Resposta do Google sem conteúdo".to_string())
-}
-
-/// Texto de teste com cara de OCR real (caixa alta, 2 balões), pra medir o modelo com a
-/// mesma carga de uma captura: prompt real + JSON completo (com breakdown e glosa).
-const SPEED_TEST_TEXT: &str = "YOU REALLY HACKED IT TO PIECES.\nI DIDN'T THINK YOU'D GO THAT FAR, KID.";
-const BENCH_TIMEOUT_SECS: u64 = 25;
 const BENCH_CONCURRENCY: usize = 4;
 const BENCH_FINALISTS: usize = 8;
 const BENCH_EXTRA_RUNS: usize = 2;
 const BENCH_FAVORITES: usize = 5;
-
-/// Alguns modelos (ex.: qwen) às vezes "escapam" pro chinês no meio do português.
-fn has_cjk(text: &str) -> bool {
-    text.chars().any(|c| matches!(c as u32, 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xAC00..=0xD7AF))
-}
-
-/// Tempo até o JSON completo de uma tradução de teste. Conta como falha se estourar o
-/// timeout ou se a resposta não vier no formato esperado (rápido mas inútil não serve).
-async fn timed_translation(provider: &str, base_url: &str, api_key: &str, model: &str) -> Result<f64, String> {
-    let started = std::time::Instant::now();
-    let call = async {
-        match provider {
-            "anthropic" => call_anthropic_text(SPEED_TEST_TEXT, api_key, base_url, model).await,
-            "google" => call_google_text(SPEED_TEST_TEXT, api_key, base_url, model).await,
-            _ => call_omniroute_text(SPEED_TEST_TEXT, api_key, base_url, model).await,
-        }
-    };
-    let raw = tokio::time::timeout(std::time::Duration::from_secs(BENCH_TIMEOUT_SECS), call)
-        .await
-        .map_err(|_| format!("sem resposta em {BENCH_TIMEOUT_SECS}s"))??;
-    let parsed = parse_translation_json(&raw).map_err(|_| "resposta fora do JSON esperado".to_string())?;
-    if parsed.translation.trim().is_empty() {
-        return Err("resposta sem tradução".to_string());
-    }
-    if has_cjk(&parsed.translation) {
-        return Err("tradução veio misturada com chinês/japonês".to_string());
-    }
-    Ok(started.elapsed().as_secs_f64())
-}
 
 #[tauri::command]
 async fn test_model_speed(
@@ -1562,25 +889,13 @@ fn delete_translations(app: tauri::AppHandle, list: String, ids: Vec<String>) ->
 
 // --- Backup: exportar/importar tudo num JSON ---
 
+#[tauri::command]
+async fn list_models(base_url: String, api_key: String, provider: Option<String>) -> Result<Vec<ModelEntry>, String> {
+    fetch_models(base_url, api_key, provider).await
+}
+
 const BACKUP_FORMAT: &str = "webtoon-translator-backup";
 const PROVIDERS: [&str; 3] = ["openai", "anthropic", "google"];
-
-/// Data UTC "AAAA-MM-DD_HH-MM" a partir de epoch ms (algoritmo days-from-civil do Howard Hinnant),
-/// só pra dar nome legível ao arquivo sem puxar uma crate de datas.
-fn utc_stamp(ms: u128) -> String {
-    let secs = (ms / 1000) as i64;
-    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
-    format!("{y:04}-{m:02}-{d:02}_{:02}-{:02}", rem / 3600, rem % 3600 / 60)
-}
 
 /// Abre o "Salvar como" do sistema (começando em Downloads) e grava o backup lá.
 /// Devolve o caminho escolhido, ou None se o usuário cancelar.
@@ -1649,18 +964,6 @@ fn storage_usage(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
         "favorites_audio_bytes": audio_bytes,
         "history_max": MAX_HISTORY,
     }))
-}
-
-/// Junta duas listas sem repetir id, mais recente primeiro (o id é o epoch ms da captura).
-fn merge_translations(local: Vec<TranslationResult>, imported: Vec<TranslationResult>) -> Vec<TranslationResult> {
-    let mut all = local;
-    for t in imported {
-        if !all.iter().any(|x| x.id == t.id) {
-            all.push(t);
-        }
-    }
-    all.sort_by_key(|t| std::cmp::Reverse(t.id.parse::<u128>().unwrap_or(0)));
-    all
 }
 
 /// Configurações e chaves do arquivo substituem as atuais; favoritos de modelos, traduções
@@ -1935,7 +1238,7 @@ async fn do_capture_and_translate(
     );
 
     let mut result = parse_translation_json(&raw)?;
-    fill_pronunciations(&mut result);
+    fill_pronunciations(&mut result, &lexicon_path());
     result.duration_secs = started_at.elapsed().as_secs_f64();
     result.model = model;
     result.pending = false;
@@ -2070,227 +1373,14 @@ pub fn run() {
         .expect("erro ao iniciar o Webtoon Translator");
 }
 
+
 #[cfg(test)]
-mod tts_smoke_test {
+mod tests {
     use super::*;
 
     #[test]
-    fn kokoro_generates_audio() {
-        let tts = create_tts().expect("falha ao criar o motor de TTS");
-        let gen_config = sherpa_onnx::GenerationConfig {
-            sid: 0,
-            speed: 1.0,
-            ..Default::default()
-        };
-        let audio = tts
-            .generate_with_config("All right, let's start on this side.", &gen_config, None::<fn(&[f32], f32) -> bool>)
-            .expect("falha ao gerar áudio");
-        assert!(audio.samples().len() > 1000, "áudio gerado está vazio demais");
-        assert!(audio.sample_rate() > 0);
-        println!(
-            "OK: {} amostras, {} Hz, {:.2}s",
-            audio.samples().len(),
-            audio.sample_rate(),
-            audio.samples().len() as f32 / audio.sample_rate() as f32
-        );
-    }
-}
-
-#[cfg(test)]
-mod ocr_smoke_test {
-    /// Precisa de um recorte de balão com "All right, let's start on this side":
-    /// OCR_TEST_IMAGE=/caminho/balao.png cargo test --release -- --ignored ocrs_reads
-    #[test]
-    #[ignore]
-    fn ocrs_reads_comic_bubble() {
-        use ocrs::{ImageSource, OcrEngine, OcrEngineParams};
-        use rten::Model;
-        use std::time::Instant;
-
-        let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("ocr-models");
-        let detection_model = Model::load_file(base.join("text-detection.onnx")).unwrap();
-        let recognition_model = Model::load_file(base.join("text-recognition.onnx")).unwrap();
-
-        let engine = OcrEngine::new(OcrEngineParams {
-            detection_model: Some(detection_model),
-            recognition_model: Some(recognition_model),
-            ..Default::default()
-        })
-        .unwrap();
-
-        let img_path = std::env::var("OCR_TEST_IMAGE").expect("defina OCR_TEST_IMAGE");
-        let img = image::open(img_path).unwrap().into_rgb8();
-        let img_source = ImageSource::from_bytes(img.as_raw(), img.dimensions()).unwrap();
-
-        let start = Instant::now();
-        let ocr_input = engine.prepare_input(img_source).unwrap();
-        let text = engine.get_text(&ocr_input).unwrap();
-        let elapsed = start.elapsed();
-
-        println!("Texto lido: {:?}", text);
-        println!("Tempo: {:.3}s", elapsed.as_secs_f32());
-        assert!(text.to_uppercase().contains("ALL RIGHT"));
-        assert!(text.to_uppercase().contains("THIS SIDE"));
-    }
-}
-
-#[cfg(test)]
-mod streaming_tests {
-    use super::*;
-
-    #[test]
-    fn campo_so_fecha_quando_a_string_termina() {
-        assert_eq!(closed_string_field(r#"{"original_text": "And wha"#, "original_text"), None);
-        assert_eq!(
-            closed_string_field(r#"{"original_text": "He said \"hi\"\nok", "trans"#, "original_text"),
-            Some("He said \"hi\"\nok".to_string())
-        );
-        assert_eq!(closed_string_field(r#"```json\n{"translation":"Oi""#, "translation"), Some("Oi".to_string()));
-    }
-
-    /// Roda contra o omniroute local: OMNI_KEY=... cargo test --release -- --ignored stream_real
-    #[tokio::test]
-    #[ignore]
-    async fn stream_real() {
-        let key = std::env::var("OMNI_KEY").expect("defina OMNI_KEY");
-        let started = std::time::Instant::now();
-        let mut events = Vec::new();
-        let mut on_event = |e: StreamEvent| {
-            let ms = started.elapsed().as_millis();
-            match e {
-                StreamEvent::FirstToken => events.push(format!("{ms}ms primeiro token")),
-                StreamEvent::Field(f, v) => events.push(format!("{ms}ms {f} = {v:?}")),
-            }
-        };
-        let (text, tokens) = stream_translation(
-            Wire::OpenAi,
-            "AND WHAT HAPPENED TO ITS OTHER ARM?",
-            &key,
-            "http://localhost",
-            "antigravity/gemini-3-flash",
-            &mut on_event,
-        )
-        .await
-        .unwrap();
-        for e in &events {
-            println!("{e}");
-        }
-        let mut result = parse_translation_json(&text).unwrap();
-        fill_pronunciations(&mut result);
-        println!("{}ms total | {:?} tokens", started.elapsed().as_millis(), tokens);
-        println!("{}", serde_json::to_string_pretty(&result).unwrap());
-        assert_eq!(events.len(), 3);
-        assert!(!result.pronunciation_pt.is_empty());
-        assert!(result.gloss.len() >= 6, "glosa veio curta: {:?}", result.gloss);
-    }
-
-    #[test]
-    fn le_o_texto_de_cada_formato_de_streaming() {
-        let j = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
-        assert_eq!(stream_delta(Wire::OpenAi, &j(r#"{"choices":[{"delta":{"content":"Oi"}}]}"#)).as_deref(), Some("Oi"));
-        assert_eq!(
-            stream_delta(Wire::Anthropic, &j(r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Oi"}}"#)).as_deref(),
-            Some("Oi")
-        );
-        assert_eq!(stream_delta(Wire::Anthropic, &j(r#"{"type":"ping"}"#)), None);
-        assert_eq!(stream_out_tokens(Wire::Anthropic, &j(r#"{"type":"message_delta","usage":{"output_tokens":42}}"#)), Some(42));
-        // Formato de streamGenerateContent?alt=sse; a parte "thought" (raciocínio) fica de fora.
-        let g = j(r#"{"candidates":[{"content":{"role":"model","parts":[{"text":"pensando...","thought":true},{"text":"{\"original_text\""}]}}],"usageMetadata":{"candidatesTokenCount":7}}"#);
-        assert_eq!(stream_delta(Wire::Google, &g).as_deref(), Some("{\"original_text\""));
-        assert_eq!(stream_out_tokens(Wire::Google, &g), Some(7));
-    }
-
-    /// Formato nativo da Anthropic, via omniroute: OMNI_KEY=... cargo test --release -- --ignored stream_anthropic
-    #[tokio::test]
-    #[ignore]
-    async fn stream_anthropic_real() {
-        let key = std::env::var("OMNI_KEY").expect("defina OMNI_KEY");
-        let started = std::time::Instant::now();
-        let mut fields = Vec::new();
-        let mut on_event = |e: StreamEvent| {
-            if let StreamEvent::Field(f, v) = e {
-                fields.push(format!("{}ms {f} = {v:?}", started.elapsed().as_millis()));
-            }
-        };
-        let (text, tokens) = stream_translation(
-            Wire::Anthropic,
-            "HE DIDN'T GO DOWN WITHOUT A FIGHT.",
-            &key,
-            "http://localhost",
-            "claude/claude-haiku-4-5-20251001",
-            &mut on_event,
-        )
-        .await
-        .unwrap();
-        for f in &fields {
-            println!("{f}");
-        }
-        let r = parse_translation_json(&text).unwrap();
-        println!("{}ms total | {tokens:?} tokens | {} | gloss {}", started.elapsed().as_millis(), r.translation, r.gloss.len());
-        assert_eq!(fields.len(), 2);
-        assert!(tokens.is_some());
-    }
-
-    #[test]
-    fn glosa_malformada_nao_derruba_a_traducao() {
-        let r = parse_translation_json(r#"{"original_text":"Hi","translation":"Oi","gloss":"hi:oi"}"#).unwrap();
-        assert_eq!(r.translation, "Oi");
-        assert!(r.gloss.is_empty());
-        let r = parse_translation_json(r#"{"translation":"Oi","gloss":[["hi","oi"],["x"],[1,2]]}"#).unwrap();
-        assert_eq!(r.gloss, vec![("hi".to_string(), "oi".to_string())]);
-    }
-
-    /// OMNI_KEY=... cargo test --release -- --ignored benchmark_real
-    #[tokio::test]
-    #[ignore]
-    async fn benchmark_real() {
-        let key = std::env::var("OMNI_KEY").expect("defina OMNI_KEY");
-        for model in ["antigravity/gemini-3-flash", "modelo/que-nao-existe"] {
-            let r = timed_translation("openai", "http://localhost", &key, model).await;
-            println!("{model}: {r:?}");
-        }
-        assert!(timed_translation("openai", "http://localhost", &key, "antigravity/gemini-3-flash").await.is_ok());
-        assert!(timed_translation("openai", "http://localhost", &key, "modelo/que-nao-existe").await.is_err());
-    }
-}
-
-#[cfg(test)]
-mod backup_tests {
-    use super::*;
-
-    #[test]
-    fn nome_do_audio_e_estavel_e_ignora_caixa() {
-        // Valores de referência do FNV-1a 64: se mudarem, os .wav já salvos ficariam órfãos.
-        assert_eq!(fnv1a64(""), 0xcbf2_9ce4_8422_2325);
-        assert_eq!(fnv1a64("a"), 0xaf63_dc4c_8601_ec8c);
+    fn nome_do_audio_do_favorito_ignora_caixa_e_espacos() {
         assert_eq!(favorite_audio_name("HEAD INSIDE"), favorite_audio_name("head  inside"));
-        let t = TranslationResult {
-            original_text: "Let's head inside now.".into(),
-            breakdown: vec![BreakdownItem { segment: "head inside".into(), ..Default::default() }],
-            ..Default::default()
-        };
-        assert_eq!(speech_texts(&t), ["Let's head inside now.", "head inside"]);
-    }
-
-    #[test]
-    fn detecta_chines_no_meio_da_traducao() {
-        assert!(has_cjk("Ele não caiu sem dar a挣扎."));
-        assert!(!has_cjk("Ele não se rendeu sem lutar — ação, ênfase, à vontade."));
-    }
-
-    #[test]
-    fn data_utc_do_nome_do_arquivo() {
-        assert_eq!(utc_stamp(0), "1970-01-01_00-00");
-        assert_eq!(utc_stamp(1_700_000_000_000), "2023-11-14_22-13");
-        assert_eq!(utc_stamp(951_782_400_000), "2000-02-29_00-00");
-    }
-
-    #[test]
-    fn mescla_sem_repetir_e_mais_recente_primeiro() {
-        let t = |id: &str, txt: &str| TranslationResult { id: id.into(), translation: txt.into(), ..Default::default() };
-        let merged = merge_translations(vec![t("300", "local"), t("100", "local")], vec![t("200", "importada"), t("300", "duplicada")]);
-        let ids: Vec<&str> = merged.iter().map(|x| x.id.as_str()).collect();
-        assert_eq!(ids, ["300", "200", "100"]);
-        assert_eq!(merged[0].translation, "local");
+        assert!(favorite_audio_name("head inside").ends_with(".wav"));
     }
 }

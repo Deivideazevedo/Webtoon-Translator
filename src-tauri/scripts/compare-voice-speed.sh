@@ -23,8 +23,8 @@ fi
 
 rm -rf "$OUT"; mkdir -p "$OUT/nativo" "$OUT/rapido"
 echo "Gerando áudios (nativo em $SPEED e em 1.0)... leva uns 30s"
-"$BIN" "$MODEL" model.onnx "$OUT/nativo" "$SPEED" "${PHRASES[@]}" | tee "$OUT/nativo.txt"
-"$BIN" "$MODEL" model.onnx "$OUT/rapido" 1.0 "${PHRASES[@]}" | tee "$OUT/rapido.txt"
+"$BIN" "$MODEL" "$OUT/nativo" "$SPEED" "${PHRASES[@]}" | tee "$OUT/nativo.txt"
+"$BIN" "$MODEL" "$OUT/rapido" 1.0 "${PHRASES[@]}" | tee "$OUT/rapido.txt"
 
 # Tempo da 1ª geração de cada frase, pra mostrar na página.
 tempos() { grep "1ª vez" "$1" | grep -oE '[0-9]+ ms' | tr -d ' ms' ; }
