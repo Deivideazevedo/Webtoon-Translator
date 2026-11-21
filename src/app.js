@@ -79,8 +79,22 @@ bubbleOpacityInput.addEventListener("change", async () => {
   }
 });
 
-speechSpeedInput.addEventListener("input", () => {
-  speechSpeedValue.textContent = `${Number(speechSpeedInput.value).toFixed(2)}x`;
+// Velocidade padrão da fala (mesmo valor de default_speech_speed no lib.rs).
+const DEFAULT_SPEECH_SPEED = 0.7;
+const speechSpeedReset = document.getElementById("speech_speed_reset");
+
+function showSpeechSpeed(value) {
+  speechSpeedValue.textContent = `${Number(value).toFixed(2)}x`;
+  // O botão só aparece quando dá pra voltar a algum lugar.
+  speechSpeedReset.hidden = Math.abs(Number(value) - DEFAULT_SPEECH_SPEED) < 0.001;
+}
+
+speechSpeedInput.addEventListener("input", () => showSpeechSpeed(speechSpeedInput.value));
+
+speechSpeedReset.addEventListener("click", () => {
+  speechSpeedInput.value = DEFAULT_SPEECH_SPEED;
+  showSpeechSpeed(DEFAULT_SPEECH_SPEED);
+  speechSpeedInput.dispatchEvent(new Event("change")); // salva igual a soltar o slider
 });
 
 speechSpeedInput.addEventListener("change", async () => {
@@ -609,9 +623,11 @@ async function openSettings() {
   setStatus(speedStatus, "", "");
   setStatus(benchStatus, "", "");
   setStatus(voiceStatus, "", "");
+  setStatus(document.getElementById("mode_status"), "", "");
   refreshVoice();
   benchResults.innerHTML = "";
   providerDetails.open = false; // acordeão recolhido por padrão, pra ganhar espaço
+  document.getElementById("voice_details").open = false;
 
   try {
     currentSettings = await invoke("load_settings");
@@ -622,9 +638,10 @@ async function openSettings() {
   providerSelect.value = (currentSettings && currentSettings.provider) || "openai";
   alwaysOnTopInput.checked = !!(currentSettings && currentSettings.always_on_top);
   shortcutBtn.textContent = (currentSettings && currentSettings.shortcut) || "CommandOrControl+Shift+T";
-  const speed = (currentSettings && currentSettings.speech_speed) || 0.9;
+  const speed = (currentSettings && currentSettings.speech_speed) || 0.7;
   speechSpeedInput.value = speed;
-  speechSpeedValue.textContent = `${Number(speed).toFixed(2)}x`;
+  showSpeechSpeed(speed);
+  setSpeechModeRadio(currentSettings && currentSettings.speech_mode);
   const opacity = (currentSettings && currentSettings.bubble_opacity) || 0.85;
   bubbleOpacityInput.value = opacity;
   bubbleOpacityValue.textContent = `${Math.round(opacity * 100)}%`;
@@ -845,12 +862,20 @@ async function refreshVoice() {
           <label class="voice-pick" title="${v.installed ? "Usar esta voz" : "Baixe antes de escolher"}">
             <input type="radio" name="voice" value="${v.id}" ${v.selected ? "checked" : ""} ${v.installed ? "" : "disabled"}>
           </label>
-          <div class="voice-info"><b>${esc(v.label)} — ${esc(v.name)}</b>${info}${tone}</div>
+          <div class="voice-info"><b>${esc(v.name)} · ${esc(v.label)}</b>${info}${tone}</div>
           <div class="voice-actions">${actions}</div>
         </div>`;
     })
     .join("");
   voiceTestBtn.disabled = !st.voices.some((v) => v.selected && v.installed);
+  // Resumo no cabeçalho do acordeão: voz e tom em uso (ou o que falta fazer).
+  const active = st.voices.find((v) => v.selected && v.installed);
+  const tone = active && active.speakers.find((sp) => sp.sid === active.speaker);
+  document.getElementById("voice_summary_value").textContent = active
+    ? `${active.name} · ${tone ? tone.label.replace(/ \(padrão\)/, "") : ""}`
+    : busy
+      ? "baixando…"
+      : "nenhuma instalada";
 }
 
 document.querySelector('.tab[data-tab="voice"]').addEventListener("click", refreshVoice);
@@ -940,6 +965,38 @@ voiceList.addEventListener("click", async (e) => {
 
 const VOICE_TEST_LABEL = "▶ Ouvir exemplo da voz escolhida";
 
+// --- Como aplicar a velocidade: base de geração fixa por modo (ver CLEAN_SYNTH_SPEED no lib.rs) ---
+const CLEAN_SYNTH_SPEED = 0.7;
+let speechMode = "instant";
+
+function setSpeechModeRadio(mode) {
+  speechMode = mode === "clean" ? "clean" : "instant";
+  document.querySelectorAll('input[name="speech_mode"]').forEach((r) => (r.checked = r.value === speechMode));
+}
+
+// O slider mostra a velocidade que se ouve; o player aplica só o que falta sobre o áudio gerado.
+function playbackFactor(desiredSpeed) {
+  return desiredSpeed / (speechMode === "clean" ? CLEAN_SYNTH_SPEED : 1);
+}
+
+document.querySelectorAll('input[name="speech_mode"]').forEach((radio) =>
+  radio.addEventListener("change", async () => {
+    try {
+      await invoke("set_speech_mode", { mode: radio.value });
+      setSpeechModeRadio(radio.value);
+      setStatus(
+        document.getElementById("mode_status"),
+        radio.value === "clean"
+          ? "Melhor qualidade: as próximas falas soam mais limpas."
+          : "Mais rápido: as próximas falas ficam prontas na hora.",
+        "ok"
+      );
+    } catch (err) {
+      setStatus(document.getElementById("mode_status"), friendlyError(err), "error");
+    }
+  })
+);
+
 voiceTestBtn.addEventListener("click", async () => {
   voiceTestBtn.disabled = true;
   // Na primeira vez de cada voz/tom o áudio é gerado na hora (no Kokoro ~2s): mostra o que está
@@ -950,7 +1007,7 @@ voiceTestBtn.addEventListener("click", async () => {
     const url = await invoke("speak_text", { text: "Hi! This is how I'll read your webtoons to you." });
     voicePlayer.src = url;
     voicePlayer.preservesPitch = true;
-    voicePlayer.defaultPlaybackRate = voicePlayer.playbackRate = Number(speechSpeedInput.value) || 0.9;
+    voicePlayer.defaultPlaybackRate = voicePlayer.playbackRate = playbackFactor(Number(speechSpeedInput.value) || 0.7);
     voiceTestBtn.textContent = "🔊 Tocando…";
     await new Promise((resolve, reject) => {
       voicePlayer.onended = resolve;
@@ -991,9 +1048,10 @@ importFile.addEventListener("change", async () => {
     // Reflete na tela o que o backup mudou (sem sair da aba Geral).
     currentSettings = await invoke("load_settings").catch(() => currentSettings);
     alwaysOnTopInput.checked = !!(currentSettings && currentSettings.always_on_top);
-    const speed = (currentSettings && currentSettings.speech_speed) || 0.9;
+    const speed = (currentSettings && currentSettings.speech_speed) || 0.7;
+    setSpeechModeRadio(currentSettings && currentSettings.speech_mode);
     speechSpeedInput.value = speed;
-    speechSpeedValue.textContent = `${Number(speed).toFixed(2)}x`;
+    showSpeechSpeed(speed);
     const opacity = (currentSettings && currentSettings.bubble_opacity) || 0.85;
     bubbleOpacityInput.value = opacity;
     bubbleOpacityValue.textContent = `${Math.round(opacity * 100)}%`;

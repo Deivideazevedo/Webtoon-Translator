@@ -28,7 +28,7 @@ pub struct Speaker {
 pub struct VoicePackage {
     pub id: &'static str,
     pub name: &'static str,
-    /// Resumo pra tela de escolha ("Natural", "Rápida").
+    /// Resumo pra tela de escolha ("mais natural", "mais leve").
     pub label: &'static str,
     pub kind: VoiceKind,
     #[serde(skip)]
@@ -63,7 +63,7 @@ impl VoicePackage {
 pub const KOKORO: VoicePackage = VoicePackage {
     id: "kokoro",
     name: "Kokoro",
-    label: "Natural",
+    label: "mais natural",
     kind: VoiceKind::Kokoro,
     url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
     archive_bytes: 319_625_534,
@@ -92,7 +92,7 @@ pub const KOKORO: VoicePackage = VoicePackage {
 pub const PIPER_LIBRITTS: VoicePackage = VoicePackage {
     id: "piper-libritts",
     name: "Piper",
-    label: "Rápida",
+    label: "mais leve",
     kind: VoiceKind::Vits,
     url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-libritts_r-medium.tar.bz2",
     archive_bytes: 82_038_311,

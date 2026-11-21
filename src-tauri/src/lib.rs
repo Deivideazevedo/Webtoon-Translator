@@ -133,10 +133,36 @@ fn tts_cache_put(app: &tauri::AppHandle, key: String, url: String) {
     };
 }
 
-/// O Kokoro sempre gera em 1.0 e o balão desacelera no player (playbackRate, mantendo o tom):
-/// gerar devagar custa ~35-45% mais CPU porque produz mais segundos de áudio, e no A/B de
-/// ouvido a diferença foi mínima. Bônus: mudar a velocidade não invalida o cache.
-const TTS_SYNTH_SPEED: f32 = 1.0;
+/// "Como aplicar a velocidade" (Configurações → Voz). A base de geração é FIXA em cada modo, então
+/// mexer no slider ou no 🐢 nunca invalida o cache: o player só aplica o fator
+/// `velocidade desejada ÷ base` (playbackRate, mantendo o tom).
+/// - instantâneo: gera em 1.0 (mais rápido de gerar; desacelerar no player pode chiar em 0,7x);
+/// - som limpo: gera nativamente em 0,7 (~40% mais lento no Kokoro), então na velocidade padrão o
+///   player não mexe em nada.
+const SPEECH_MODE_INSTANT: &str = "instant";
+const SPEECH_MODE_CLEAN: &str = "clean";
+const CLEAN_SYNTH_SPEED: f32 = 0.7;
+const ALL_SYNTH_SPEEDS: [f32; 2] = [1.0, CLEAN_SYNTH_SPEED];
+
+static SPEECH_MODE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+fn synth_speed() -> f32 {
+    match SPEECH_MODE.lock().map(|m| m.clone()).unwrap_or_default().as_str() {
+        SPEECH_MODE_CLEAN => CLEAN_SYNTH_SPEED,
+        _ => 1.0,
+    }
+}
+
+#[tauri::command]
+fn set_speech_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
+    if mode != SPEECH_MODE_INSTANT && mode != SPEECH_MODE_CLEAN {
+        return Err("Modo desconhecido.".to_string());
+    }
+    let mut settings = load_settings(app.clone())?;
+    settings.speech_mode = mode.clone();
+    *SPEECH_MODE.lock().map_err(|_| "estado corrompido")? = mode;
+    save_settings(app, settings)
+}
 
 fn load_tts_engine(
     app: &tauri::AppHandle,
@@ -177,7 +203,7 @@ fn warm_up_tts(app: &tauri::AppHandle) {
 
 /// Devolve (data URL, veio_do_cache). O motor é carregado só no primeiro uso (lazy).
 fn synthesize_speech(app: &tauri::AppHandle, text: &str, session: &str) -> Result<(String, bool), String> {
-    let speed = TTS_SYNTH_SPEED;
+    let speed = synth_speed();
     let voice = selected_voice();
     let sid = speaker_sid(voice);
     let key = tts_cache_key(voice, sid, text, speed);
@@ -221,13 +247,13 @@ fn favorite_audio_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, Stri
     Ok(dir)
 }
 
-fn favorite_audio_name_for(voice: &voice::VoicePackage, sid: i32, text: &str) -> String {
-    format!("{:016x}.wav", fnv1a64(&tts_cache_key(voice, sid, text, TTS_SYNTH_SPEED)))
+fn favorite_audio_name_for(voice: &voice::VoicePackage, sid: i32, speed: f32, text: &str) -> String {
+    format!("{:016x}.wav", fnv1a64(&tts_cache_key(voice, sid, text, speed)))
 }
 
 fn favorite_audio_name(text: &str) -> String {
     let voice = selected_voice();
-    favorite_audio_name_for(voice, speaker_sid(voice), text)
+    favorite_audio_name_for(voice, speaker_sid(voice), synth_speed(), text)
 }
 
 fn read_favorite_audio(app: &tauri::AppHandle, text: &str) -> Option<String> {
@@ -290,7 +316,8 @@ fn gc_favorite_audio(app: &tauri::AppHandle) {
             voice::VOICES
                 .iter()
                 .flat_map(|v| v.speakers.iter().map(move |sp| (*v, sp.sid)))
-                .map(move |(v, sid)| favorite_audio_name_for(v, sid, &t))
+                .flat_map(|(v, sid)| ALL_SYNTH_SPEEDS.iter().map(move |speed| (v, sid, *speed)))
+                .map(move |(v, sid, speed)| favorite_audio_name_for(v, sid, speed, &t))
         })
         .collect();
     for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
@@ -595,6 +622,9 @@ struct Settings {
     /// Tom escolhido em cada voz (id da voz → sid).
     #[serde(default)]
     voice_speakers: std::collections::HashMap<String, i32>,
+    /// "instant" (gera em 1.0) ou "clean" (gera nativo em 0,7).
+    #[serde(default = "default_speech_mode")]
+    speech_mode: String,
 }
 
 impl Settings {
@@ -620,7 +650,11 @@ fn default_shortcut() -> String {
 }
 
 fn default_speech_speed() -> f32 {
-    0.9
+    0.7
+}
+
+fn default_speech_mode() -> String {
+    SPEECH_MODE_INSTANT.to_string()
 }
 
 fn default_bubble_opacity() -> f32 {
@@ -656,6 +690,7 @@ impl Default for Settings {
             bubble_opacity: default_bubble_opacity(),
             voice: default_voice(),
             voice_speakers: std::collections::HashMap::new(),
+            speech_mode: default_speech_mode(),
             provider: default_provider(),
             anthropic_base_url: default_anthropic_base_url(),
             anthropic_model: String::new(),
@@ -1222,6 +1257,9 @@ fn import_data(app: tauri::AppHandle, json: String) -> Result<String, String> {
         if let Ok(mut speakers) = SELECTED_SPEAKERS.lock() {
             *speakers = Some(imported.voice_speakers.clone());
         }
+        if let Ok(mut mode) = SPEECH_MODE.lock() {
+            *mode = imported.speech_mode.clone();
+        }
         save_settings(app.clone(), imported)?;
         summary.push("configurações".to_string());
     }
@@ -1563,6 +1601,7 @@ pub fn run() {
             remove_voice,
             select_voice,
             select_voice_speaker,
+            set_speech_mode,
         ])
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -1584,6 +1623,9 @@ pub fn run() {
             if let Ok(settings) = load_settings(app.handle().clone()) {
                 if let Ok(mut speakers) = SELECTED_SPEAKERS.lock() {
                     *speakers = Some(settings.voice_speakers.clone());
+                }
+                if let Ok(mut mode) = SPEECH_MODE.lock() {
+                    *mode = settings.speech_mode.clone();
                 }
                 if let Ok(mut selected) = SELECTED_VOICE.lock() {
                     *selected = settings.voice;
@@ -1630,5 +1672,22 @@ mod tests {
     fn nome_do_audio_do_favorito_ignora_caixa_e_espacos() {
         assert_eq!(favorite_audio_name("HEAD INSIDE"), favorite_audio_name("head  inside"));
         assert!(favorite_audio_name("head inside").ends_with(".wav"));
+    }
+
+    /// Os áudios de favoritos já salvos (Kokoro, tom 0, gerados em 1.0) têm que continuar com o
+    /// mesmo nome; tom, voz e base de geração diferentes não podem colidir com eles.
+    #[test]
+    fn nome_do_audio_salvo_nao_muda_e_nao_colide() {
+        let legacy = format!("{:016x}.wav", fnv1a64("1.00|head inside"));
+        assert_eq!(favorite_audio_name_for(&voice::KOKORO, 0, 1.0, "HEAD inside"), legacy);
+        let outros = [
+            favorite_audio_name_for(&voice::KOKORO, 0, CLEAN_SYNTH_SPEED, "head inside"),
+            favorite_audio_name_for(&voice::KOKORO, 2, 1.0, "head inside"),
+            favorite_audio_name_for(&voice::PIPER_LIBRITTS, 0, 1.0, "head inside"),
+        ];
+        for nome in &outros {
+            assert_ne!(nome, &legacy);
+        }
+        assert_ne!(outros[0], outros[1]);
     }
 }

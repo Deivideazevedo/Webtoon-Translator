@@ -295,6 +295,9 @@ button.danger { background: var(--danger); }
 .voice-row .voice-info b { font-size: 14px; }
 .voice-row .voice-info small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
 .voice-row .voice-info .progress { margin: 6px 0 0; }
+.mode-option { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; margin: 0; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); cursor: pointer; }
+.mode-option input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); flex-shrink: 0; }
+.mode-option small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.4; }
 .voice-row .tone-select { width: auto; max-width: 100%; margin: 6px 0 0; padding: 4px 28px 4px 8px; font-size: 13px; }
 .voice-row .voice-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .voice-row .voice-actions button { padding: 5px 10px; font-size: 13px; }

@@ -26,6 +26,8 @@ function savePrefs() {
 // Lento é absoluto (referência 1.0), não relativo à velocidade configurada: com 0.7
 // configurado, 0.7 × 0.7 dava 0.49 e ficava arrastado.
 const SLOW_RATE = 0.5;
+// Base de geração do modo "som mais limpo" (CLEAN_SYNTH_SPEED no lib.rs).
+const CLEAN_SYNTH_SPEED = 0.7;
 const TH_HINT = "th: ponta da língua entre os dentes, soprando o ar — não é f nem t";
 const WORD_RE = /[A-Za-z]+(?:['’][A-Za-z]+)*/g;
 
@@ -222,9 +224,12 @@ async function speak(btn) {
       setTimeout(() => reject(new Error("Demorou demais pra gerar o áudio (>20s).")), 20000)
     );
     const dataUrl = await Promise.race([invoke("speak_text", { text: btn.dataset.text }), timeout]);
-    // O áudio é gerado sempre em 1.0; a velocidade (configurada ou a lenta) é aplicada no player.
+    // O áudio vem gerado na base do modo (1.0 ou 0,7 nativo); o player aplica só o que falta pra
+    // chegar na velocidade desejada (a configurada ou a lenta).
     const settings = await invoke("load_settings").catch(() => null);
-    const rate = btn.dataset.slow ? SLOW_RATE : (settings && settings.speech_speed) || 0.9;
+    const desired = btn.dataset.slow ? SLOW_RATE : (settings && settings.speech_speed) || 0.7;
+    const base = settings && settings.speech_mode === "clean" ? CLEAN_SYNTH_SPEED : 1;
+    const rate = desired / base;
     player.pause();
     player.currentTime = 0;
     player.src = dataUrl;
