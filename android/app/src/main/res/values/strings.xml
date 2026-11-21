@@ -6,14 +6,64 @@
     <string name="action_back">Voltar</string>
     <string name="action_close">Fechar</string>
     <string name="action_settings">Configurações</string>
-    <string name="action_open_image">Abrir outra imagem</string>
+    <string name="action_copy">📋 Copiar</string>
+    <string name="action_favorite">Favoritar</string>
+    <string name="action_unfavorite">Remover dos favoritos</string>
+    <string name="action_delete">Excluir</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_clear_selection">Cancelar seleção</string>
 
     <!-- Tela inicial -->
-    <string name="home_empty_title">Abra uma página do webtoon</string>
-    <string name="home_empty_body">Escolha um print ou imagem da galeria e selecione o balão que quer traduzir.</string>
-    <string name="home_pick_image">🖼 Escolher imagem</string>
-    <string name="home_preparing_ocr">Preparando o OCR…</string>
-    <string name="home_selection_hint">Toque e segure sobre o balão, depois arraste pra selecionar.</string>
+    <string name="floating_start">Iniciar tradutor flutuante</string>
+    <string name="floating_stop">Parar tradutor flutuante</string>
+    <string name="floating_running">Ligado: toque no ícone flutuante e arraste-o sobre o balão.</string>
+    <string name="floating_stopped">Desligado</string>
+    <string name="tab_recent">Recentes</string>
+    <string name="tab_favorites">Favoritos</string>
+    <!-- quantas / limite -->
+    <string name="history_recent_count">%1$d/%2$d</string>
+    <!-- quantas · espaço em disco -->
+    <string name="history_favorites_count">%1$d · %2$s</string>
+    <string name="history_empty_recent">Nenhuma tradução ainda. Inicie o tradutor flutuante e selecione um balão no seu app de webtoon.</string>
+    <string name="history_empty_favorites">Toque na ☆ de uma tradução pra guardar aqui.</string>
+    <string name="history_via">via %1$s</string>
+    <string name="history_duration">🕐 %1$.1fs</string>
+    <plurals name="selection_count">
+        <item quantity="one">%1$d selecionada</item>
+        <item quantity="other">%1$d selecionadas</item>
+    </plurals>
+    <plurals name="delete_confirm_title">
+        <item quantity="one">Excluir %1$d tradução?</item>
+        <item quantity="other">Excluir %1$d traduções?</item>
+    </plurals>
+    <string name="delete_confirm_body">Isso não pode ser desfeito.</string>
+
+    <!-- Tradutor flutuante -->
+    <string name="floating_open_app">📱 Abrir o app</string>
+    <string name="floating_armed_hint">Arraste o ícone até o fim do balão e solte</string>
+    <string name="fixed_region_select">Ajuste a área e toque em ✓</string>
+    <string name="fixed_region_hint">Toque no ícone pra traduzir a área marcada</string>
+    <string name="mode_title">Modo de tradução</string>
+    <string name="mode_region">Região</string>
+    <string name="mode_fixed_region">Região fixa</string>
+    <string name="cd_speak">Ouvir</string>
+    <string name="cd_speak_slow">Ouvir devagar</string>
+    <string name="cd_toggle_ipa">Alternar pronúncia PT-BR / IPA</string>
+    <string name="cd_learn">Aprender: trechos e gramática</string>
+    <string name="cd_reselect">Marcar a área de novo</string>
+    <string name="notification_channel">Tradutor flutuante</string>
+    <string name="notification_title">Tradutor flutuante ligado</string>
+    <string name="notification_text">Toque no ícone e arraste-o sobre o balão pra traduzir.</string>
+
+    <!-- Permissões (explicadas antes do aviso do Android) -->
+    <string name="permission_overlay_title">Permitir aparecer sobre outros apps</string>
+    <string name="permission_overlay_body">O ícone flutuante fica por cima do seu app de webtoon. Na próxima tela, encontre o Webtoon Translator na lista e ative "Aparecer sobre outros apps".</string>
+    <string name="permission_capture_title">Permitir captura da tela</string>
+    <string name="permission_capture_body">O app lê o texto do balão que você seleciona. Na próxima tela, escolha "Tela inteira" e toque em "Compartilhar tela".
+
+Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próprio celular; só o texto lido vai pra IA. Enquanto o tradutor estiver ligado, o Android mostra um aviso de compartilhamento de tela.</string>
+    <string name="permission_continue">Continuar</string>
+    <string name="permission_dont_show_again">Não mostrar novamente</string>
 
     <!-- Cartão de tradução -->
     <string name="result_title">Tradução</string>
@@ -26,13 +76,16 @@
     <string name="speak_normal">🔊</string>
     <string name="speak_slow">🐢</string>
     <string name="pronunciation">🗣 %1$s</string>
+    <string name="pronunciation_show_ipa">IPA</string>
+    <string name="pronunciation_show_pt">PT</string>
+    <string name="learn_show">📖 Aprender ▾</string>
+    <string name="learn_hide">📖 Aprender ▴</string>
     <!-- trecho — significado -->
     <string name="segment_line">%1$s — %2$s</string>
 
     <!-- Erros e avisos -->
     <string name="error_not_configured">Configure a chave de API e o modelo em ⚙ Configurações.</string>
     <string name="error_no_text">Não encontrei texto nessa área. Tente pegar o balão inteiro.</string>
-    <string name="error_open_image">Não consegui abrir a imagem: %1$s</string>
     <string name="speech_not_ready">A voz do Android ainda está carregando.</string>
     <string name="speech_missing_voice">Instale a voz em inglês nas configurações de voz do Android.</string>
 

@@ -3,11 +3,39 @@
 Pendências do Webtoon Translator, em ordem de prioridade. Ideias marcadas com 💡 vieram da análise do
 app *Translate On Screen* (21/11/2026).
 
-Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito
+Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito · ➖ descartado ou absorvido por outro item
 
 ---
 
 ## Android
+
+### Modos de tradução e cartão novo (ver [`android/LAYOUT.md`](android/LAYOUT.md) §5.6–5.7) — em andamento (etapa 1 feita: M1–M4)
+
+| # | Item | Status |
+|---|---|---|
+| M1 | **Cartão flutuante novo**: escuro translúcido, arrastável, cabeçalho só com ícones iguais (🔊 🐢 📋 ★ IPA 📖 · ⌗ ✕) | 🟨 (feito; falta a opacidade configurável) |
+| M2 | **Seletor de modo** (menu do ícone e tela Inicial) | 🟨 (no menu do ícone; falta na tela Inicial) |
+| M3 | **Região** no cartão novo | ✅ |
+| M4 | **Região fixa**: área com alças nos cantos e ✓/✗; toque no ícone traduz de novo; ⌗ redefine (absorve o item 31) | ✅ |
+| M5 | **Tela cheia**: OCR com posição de cada bloco + agrupamento em balões; uma chamada à IA pra todos; tradução em cima de cada balão; toque abre o cartão completo | ⬜ |
+| M6 | **Região automática**: traduz sozinho quando a área muda (cartão fora da área) | ⬜ |
+| M7 | **Tela cheia automática**: traduz de novo quando a rolagem para | ⬜ |
+
+### Layout novo (ver [`android/LAYOUT.md`](android/LAYOUT.md))
+
+Padrão visual e organização inspirados no Translate On Screen, com o azul do app. Vem antes do
+resto: as próximas telas já nascem no padrão novo.
+
+| # | Item | Status |
+|---|---|---|
+| L1 | **Tema claro e escuro** com as cores do LAYOUT.md (neutros + azul), seguindo o sistema; opção Automático / Claro / Escuro | ⬜ |
+| L2 | **Componentes padrão**: barra do topo fixa, navegação inferior, cartão de seção, título de seção, `IconTile` (quadrado/redondo, cor em transparência + ícone sólido), linha de configuração, seletor ▾, bottom sheet de opções, abas em pílula | ⬜ |
+| L3 | **Navegação inferior: Inicial \| Traduções \| Mais** | ⬜ |
+| L4 | **Inicial**: cartão com botão grande + pílula de status + seletores **Modelo de IA** e **Modo de tradução** (bottom sheets); última tradução; personalizar ícone | ⬜ |
+| L5 | **Traduções**: traduzir texto digitado/colado (absorve o item 37) + Recentes/Favoritos | ⬜ |
+| L6 | **Mais**: Conexão, Voz, Aparência, Acesso rápido · Dados (Backup, Armazenamento) · Suporte (Tutorial, App fechando sozinho, Sobre e licenças) | ⬜ |
+| L7 | **Voz**: voz do Android (escolher entre as instaladas), **tom** e velocidade, ouvir exemplo — tudo nativo, sem gerar áudio | ⬜ |
+| L8 | Cartão de tradução e ícone flutuante seguindo o tema e o padrão de botões redondos | ⬜ |
 
 ### Prioridade 1 — base do app (paridade com o desktop)
 
@@ -15,11 +43,11 @@ Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito
 
 | # | Item | Status |
 |---|---|---|
-| 1 | **Botão grande Iniciar/Parar** o tradutor flutuante, com o estado escrito embaixo 💡 | ⬜ |
+| 1 | **Botão grande Iniciar/Parar** o tradutor flutuante, com o estado escrito embaixo 💡 | ✅ |
 | 2 | **Seletor de modelo** na tela inicial, com ★ favoritos no topo | ⬜ |
-| 3 | **Recentes (até 20) / Favoritos** (sem limite, mostrando o espaço ocupado por texto + áudio); ★ em cada cartão; o cartão ativo fica destacado | ⬜ |
-| 4 | **Excluir em lote**: segurar o dedo num cartão entra no modo de seleção (caixas de marcar + "Excluir (n)") | ⬜ |
-| 5 | Tocar num cartão do histórico **abre a tradução completa** de novo | ⬜ |
+| 3 | **Recentes (até 20) / Favoritos** (sem limite, mostrando o espaço ocupado por texto + áudio); ★ em cada cartão; o cartão ativo fica destacado | ✅ |
+| 4 | **Excluir em lote**: segurar o dedo num cartão entra no modo de seleção (caixas de marcar + "Excluir (n)") | ✅ |
+| 5 | Tocar num cartão do histórico **abre a tradução completa** de novo | ✅ |
 
 **Configurações → Conexão**
 
@@ -34,27 +62,27 @@ Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito
 
 | # | Item | Status |
 |---|---|---|
-| 10 | **Voz do Android** como padrão (escolher entre as vozes em inglês instaladas no celular) | 🟨 (já fala, falta escolher a voz) |
+| 10 | **Voz do Android** como padrão (escolher entre as vozes em inglês instaladas, **tom** e velocidade — ver L7) | 🟨 (já fala, falta escolher a voz) |
 | 11 | **Velocidade da fala** (padrão 0,70x, dica e "↺ Voltar ao padrão") | ✅ |
 | 12 | **🐢 lento** fixo em 0,5x, independente da velocidade configurada | ✅ |
 | 13 | **▶ Ouvir exemplo** da voz escolhida | ⬜ |
-| 14 | **Vozes Kokoro (mais natural) / Piper (mais leve) pra baixar**, com os 11 tons de cada e a "Prioridade do áudio" (mais rápido / melhor qualidade), igual ao desktop — etapa seguinte à voz do Android | ⬜ |
+| 14 | ~~Vozes Kokoro/Piper pra baixar~~ — descartado no Android: a voz do sistema já troca voz, tom e velocidade na hora, sem baixar nada (ver L7) | ➖ |
 
 **Configurações → Geral**
 
 | # | Item | Status |
 |---|---|---|
 | 15 | **Opacidade do cartão flutuante** (translucidez, igual à do balão do desktop) | ⬜ |
-| 16 | **Backup: exportar / importar** (configurações, chaves, favoritos de modelo, traduções) no **mesmo formato do desktop**: exporta no PC e importa no celular, e vice-versa | ⬜ |
+| 16 | **Backup: exportar / importar** (configurações, chaves, favoritos de modelo, traduções) no **mesmo formato do desktop**: exporta no PC e importa no celular, e vice-versa | 🟨 (núcleo pronto e compartilhado com o desktop; falta a tela) |
 
 **Cartão de tradução (o "balão" do celular)**
 
 | # | Item | Status |
 |---|---|---|
-| 17 | Tradução, original e pronúncia **PT-BR ⇄ IPA** (botão pra alternar) | 🟨 (falta o IPA) |
+| 17 | Tradução, original e pronúncia **PT-BR ⇄ IPA** (botão pra alternar) | ✅ |
 | 18 | 🔊 / 🐢 na frase e em cada trecho | ✅ |
-| 19 | **📖 Aprender ▾** recolhível com abas Trechos / Gramática (lembra a escolha) | 🟨 (mostra tudo aberto) |
-| 20 | **📋 Copiar** e **★ favoritar** direto do cartão | ⬜ |
+| 19 | **📖 Aprender ▾** recolhível com abas Trechos / Gramática (lembra a escolha) | ✅ |
+| 20 | **📋 Copiar** e **★ favoritar** direto do cartão | ✅ |
 | 21 | Rodapé com modelo · tempo | ✅ |
 
 **Geral do app**
@@ -62,18 +90,18 @@ Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito
 | # | Item | Status |
 |---|---|---|
 | 22 | **Ícones de verdade** com área de toque de 48 dp (← e ⚙ estavam pequenos demais) | ✅ |
-| 23 | **Tela explicativa antes de cada permissão** do sistema, com imagem e texto de privacidade 💡 | ⬜ |
+| 23 | **Tela explicativa antes de cada permissão** do sistema, com imagem e texto de privacidade 💡 | 🟨 (explicação em texto; falta a imagem) |
 
 ### Prioridade 2 — botão flutuante
 
 | # | Item | Status |
 |---|---|---|
-| 24 | Ícone flutuante arrastável que **gruda na borda** (meio escondido e semitransparente quando parado) e volta pro canto ao trocar de app 💡 | ⬜ |
-| 25 | **Modo região**: tocar no ícone arma a seleção; arrastar o ícone desenha o retângulo a partir daquele ponto; soltar traduz. Fora disso, arrastar só move o ícone e a página embaixo continua rolando 💡 | ⬜ |
-| 26 | **Toque longo** (ou tocar de novo sem arrastar) abre o menu de baixo: modo, modelo, abrir o app, parar 💡 | ⬜ |
-| 27 | **Cartão de tradução perto da área selecionada**, com o conteúdo do balão do desktop (PT/IPA, 🔊, 🐢, Aprender, Copiar, ★) | ⬜ |
+| 24 | Ícone flutuante arrastável que **gruda na borda** (semitransparente quando parado) e volta pro canto ao trocar de app 💡 | 🟨 (fica onde foi solto; volta pra borda com folga ao tocar fora e fica transparente; falta voltar ao trocar de app) |
+| 25 | **Modo região**: tocar no ícone arma a seleção; arrastar o ícone desenha o retângulo a partir daquele ponto; soltar traduz. Fora disso, arrastar só move o ícone e a página embaixo continua rolando 💡 | ✅ |
+| 26 | **Toque longo** (ou tocar de novo sem arrastar) abre o menu de baixo: modo, modelo, abrir o app, parar 💡 | 🟨 (modo, abrir o app e parar; falta escolher o modelo) |
+| 27 | **Cartão de tradução perto da área selecionada**, com o conteúdo do balão do desktop (PT/IPA, 🔊, 🐢, Aprender, Copiar, ★) | ✅ |
 | 28 | **Tocar numa palavra** mostra o significado (a glosa; no celular não existe hover) 💡 | ⬜ |
-| 29 | Desligar pelo **"Parar" na notificação** e arrastando o ícone até um ✕ embaixo da tela | ⬜ |
+| 29 | Desligar pelo **"Parar" na notificação** e arrastando o ícone até um ✕ embaixo da tela | 🟨 ("Parar" na notificação e no menu; falta arrastar até o ✕) |
 | 30 | Tela de ajuda pro **"app fechando sozinho"** (otimização de bateria da Samsung/Xiaomi) 💡 | ⬜ |
 
 Regra de captura: **esconder tudo que é nosso** (ícone, cartão, retângulo) antes de capturar a tela e
@@ -83,7 +111,7 @@ cortar a barra de status. O Translate On Screen não faz isso e traduz o própri
 
 | # | Item | Status |
 |---|---|---|
-| 31 | **Modo região fixa**: desenhar a área uma vez (alças nos cantos, ✓/✗); cada toque no ícone traduz de novo; botão "selecionar de novo" no cartão 💡 | ⬜ |
+| 31 | **Modo região fixa**: desenhar a área uma vez (alças nos cantos, ✓/✗); cada toque no ícone traduz de novo; botão "selecionar de novo" no cartão 💡 | ➖ (virou M4) |
 | 32 | **Editar o texto do OCR** e traduzir de novo (quando o OCR erra uma letra) 💡 | ⬜ |
 | 33 | Personalizar o ícone flutuante: tamanho, transparência, cor 💡 | ⬜ |
 | 34 | Ações configuráveis no toque duplo e no toque longo do ícone 💡 | ⬜ |
@@ -94,14 +122,12 @@ cortar a barra de status. O Translate On Screen não faz isso e traduz o própri
 
 | # | Item | Status |
 |---|---|---|
-| 37 | Aba **"Traduzir texto"**: digitar ou colar uma frase, com a mesma análise didática 💡 | ⬜ |
+| 37 | Aba **"Traduzir texto"**: digitar ou colar uma frase, com a mesma análise didática 💡 | ➖ (vira parte da aba Traduções, L5) |
 | 38 | Traduzir pela **câmera** (livro/mangá físico) 💡 | ⬜ |
 | 39 | Capturar **só um app** (Android 14+), por privacidade 💡 | ⬜ |
 
 ### Fora do escopo (decidido)
 
-- **Modo tela cheia e modos automáticos**: no teste traduziram a barra de status, a URL do navegador e o
-  próprio cartão; o foco do app é entender um balão por vez.
 - **Vários motores de tradução** (Yandex, Baidu…): o diferencial é a IA com explicação; o seletor de
   modelo já cobre a escolha.
 

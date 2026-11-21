@@ -12,10 +12,14 @@ Pré-requisitos: Android SDK (com NDK), Rust com o alvo `aarch64-linux-android` 
 rustup target add aarch64-linux-android
 cargo install cargo-ndk
 
-# JAVA_HOME precisa ser um JDK completo (ex.: o do Android Studio).
-JAVA_HOME=/opt/android-studio/jbr ./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+# Na raiz do repositório:
+make apk        # gera o APK (android/app/build/outputs/apk/debug/app-debug.apk)
+make android    # gera, instala no celular conectado pelo adb e abre o app
 ```
+
+O `make` já aponta o `JAVA_HOME` pro JDK do Android Studio (o Java do sistema costuma ser só o
+JRE); dá pra trocar com `make apk JAVA_HOME=/outro/jdk`. Com mais de um celular conectado:
+`make android ADB_SERIAL=<id do adb devices>`.
 
 O Gradle roda o `build-rust.sh` antes de cada build: ele compila a ponte Rust pra `.so` e gera os
 bindings Kotlin (UniFFI) em `app/build/rust/`. Os modelos do OCR e o dicionário de pronúncia são
@@ -67,4 +71,5 @@ app/src/main/java/com/deivide/webtoontranslator/
 - **Threads**: trabalho pesado (OCR, decodificar imagem, copiar modelos) roda em `Dispatchers.Default/IO`
   dentro dos repositórios; ViewModels e telas nunca bloqueiam a thread principal.
 
-O que falta fazer está no [`ROADMAP.md`](../ROADMAP.md) da raiz.
+O padrão visual (cores, ícones, cartões, telas) está no [`LAYOUT.md`](LAYOUT.md); o que falta
+fazer, no [`ROADMAP.md`](../ROADMAP.md) da raiz.

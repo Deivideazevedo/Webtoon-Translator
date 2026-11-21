@@ -1,134 +1,110 @@
 package com.deivide.webtoontranslator.ui.home
 
-import android.graphics.Rect
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.deivide.webtoontranslator.R
 import com.deivide.webtoontranslator.WebtoonApp
-import com.deivide.webtoontranslator.data.image.PageLoader
-import com.deivide.webtoontranslator.data.settings.SettingsRepository
-import com.deivide.webtoontranslator.data.speech.SpeechPlayer
-import com.deivide.webtoontranslator.data.translation.TranslationRepository
-import com.deivide.webtoontranslator.domain.model.TranslationEvent
+import com.deivide.webtoontranslator.data.library.LibraryRepository
+import com.deivide.webtoontranslator.data.library.SavedList
+import com.deivide.webtoontranslator.data.settings.ReadingOptions
+import com.deivide.webtoontranslator.domain.model.Translation
+import com.deivide.webtoontranslator.floating.FloatingStatus
 import com.deivide.webtoontranslator.ui.common.UiText
-import com.deivide.webtoontranslator.ui.common.friendlyMessage
 import com.deivide.webtoontranslator.ui.common.toUiText
-import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import com.deivide.webtoontranslator.ui.translation.TranslationActions
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
+/** Tela inicial: recentes e favoritos, seleção pra excluir e tradução aberta. */
 class HomeViewModel(
-    private val translations: TranslationRepository,
-    private val settings: SettingsRepository,
-    private val pageLoader: PageLoader,
-    private val speech: SpeechPlayer,
+    private val library: LibraryRepository,
+    private val actions: TranslationActions,
+    floating: FloatingStatus,
     warmUp: suspend () -> Unit,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private val local = MutableStateFlow(HomeUiState())
 
-    private var translationJob: Job? = null
+    val uiState: StateFlow<HomeUiState> =
+        combine(local, library.library, actions.options, floating.running) { l, lib, options, running ->
+            l.copy(library = lib, options = options, floatingRunning = running)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     init {
         viewModelScope.launch {
-            runCatching { warmUp() }.onFailure { notify(it.toUiText()) }
-            _uiState.update { it.copy(engineReady = true) }
+            runCatching { library.refresh() }.onFailure { notify(it.toUiText()) }
         }
+        // OCR carregando desde já, pra primeira seleção não esperar.
+        viewModelScope.launch { runCatching { warmUp() } }
     }
 
-    fun openImage(uri: Uri) {
+    fun selectTab(tab: SavedList) = local.update { it.copy(tab = tab, selecting = false, selection = emptySet()) }
+
+    fun onCardClick(translation: Translation) = local.update {
+        if (it.selecting) it.withToggled(translation.id) else it.copy(opened = translation)
+    }
+
+    /** Segurar o dedo num cartão entra no modo de seleção, já com ele marcado. */
+    fun onCardLongClick(translation: Translation) = local.update {
+        it.copy(selecting = true, selection = it.selection + translation.id)
+    }
+
+    fun clearSelection() = local.update { it.copy(selecting = false, selection = emptySet()) }
+
+    fun requestDelete() = local.update { it.copy(confirmingDelete = it.selection.isNotEmpty()) }
+
+    fun cancelDelete() = local.update { it.copy(confirmingDelete = false) }
+
+    fun confirmDelete() {
+        val state = local.value
+        local.update { it.copy(confirmingDelete = false, selecting = false, selection = emptySet()) }
         viewModelScope.launch {
-            runCatching { pageLoader.load(uri) }
-                .onSuccess { page -> _uiState.update { it.copy(page = page, result = null) } }
-                .onFailure { notify(UiText.Resource(R.string.error_open_image, listOf(it.friendlyMessage()))) }
+            runCatching { library.delete(state.tab, state.selection) }.onFailure { notify(it.toUiText()) }
         }
     }
 
-    /** OCR da área (em pixels da página) e tradução em streaming. */
-    fun translateArea(area: Rect) {
-        val page = _uiState.value.page ?: return
-        val current = settings.load()
-        if (!current.isConfigured) {
-            setResult(ResultState.Failed(UiText.Resource(R.string.error_not_configured)))
-            return
-        }
-        translationJob?.cancel()
-        translationJob = viewModelScope.launch {
-            setResult(ResultState.Reading)
-            val text = try {
-                translations.recognize(withContext(Dispatchers.Default) { page.crop(area) })
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                setResult(ResultState.Failed(e.toUiText()))
-                return@launch
-            }
-            if (text.isBlank()) {
-                setResult(ResultState.Failed(UiText.Resource(R.string.error_no_text)))
-                return@launch
-            }
-            setResult(ResultState.Streaming(original = text))
-            translations.translate(text, current)
-                .catch { setResult(ResultState.Failed(it.toUiText())) }
-                .collect { event -> _uiState.update { it.copy(result = it.result.apply(event)) } }
-        }
-    }
+    fun closeOpened() = local.update { it.copy(opened = null) }
 
-    fun closeResult() {
-        translationJob?.cancel()
-        setResult(null)
+    fun toggleFavorite(translation: Translation) {
+        viewModelScope.launch {
+            runCatching { actions.toggleFavorite(translation) }.onFailure { notify(it.toUiText()) }
+        }
     }
 
     fun speak(text: String, slow: Boolean) {
-        val rate = if (slow) SLOW_RATE else settings.load().speechSpeed
-        when (speech.speak(text, rate)) {
-            SpeechPlayer.Result.Spoken -> Unit
-            SpeechPlayer.Result.NotReady -> notify(UiText.Resource(R.string.speech_not_ready))
-            SpeechPlayer.Result.MissingEnglishVoice -> notify(UiText.Resource(R.string.speech_missing_voice))
-        }
+        actions.speak(text, slow)?.let(::notify)
     }
 
-    fun dismissNotice() = _uiState.update { it.copy(notice = null) }
+    fun updateOptions(change: (ReadingOptions) -> ReadingOptions) = actions.updateOptions(change)
 
-    private fun setResult(result: ResultState?) = _uiState.update { it.copy(result = result) }
+    fun dismissNotice() = local.update { it.copy(notice = null) }
 
-    private fun notify(message: UiText) = _uiState.update { it.copy(notice = message) }
+    private fun notify(message: UiText) = local.update { it.copy(notice = message) }
+
+    private fun HomeUiState.withToggled(id: String): HomeUiState {
+        val selection = if (id in selection) selection - id else selection + id
+        // Desmarcar o último sai do modo de seleção.
+        return copy(selection = selection, selecting = selection.isNotEmpty())
+    }
 
     companion object {
-        /** Velocidade do 🐢: absoluta, como no desktop. */
-        private const val SLOW_RATE = 0.5f
-
         val Factory = viewModelFactory {
             initializer {
                 val container = (this[APPLICATION_KEY] as WebtoonApp).container
                 HomeViewModel(
-                    translations = container.translationRepository,
-                    settings = container.settingsRepository,
-                    pageLoader = container.pageLoader,
-                    speech = container.speechPlayer,
+                    library = container.libraryRepository,
+                    actions = container.translationActions,
+                    floating = container.floatingStatus,
                     warmUp = container::warmUp,
                 )
             }
         }
     }
-}
-
-/** Aplica um evento do streaming ao cartão (ignorado se o cartão foi fechado nesse meio-tempo). */
-private fun ResultState?.apply(event: TranslationEvent): ResultState? = when (event) {
-    is TranslationEvent.Done -> if (this == null) null else ResultState.Done(event.translation)
-    is TranslationEvent.Original ->
-        (this as? ResultState.Streaming)?.copy(original = event.text, pronunciation = event.pronunciation) ?: this
-    is TranslationEvent.Translated -> (this as? ResultState.Streaming)?.copy(translation = event.text) ?: this
 }

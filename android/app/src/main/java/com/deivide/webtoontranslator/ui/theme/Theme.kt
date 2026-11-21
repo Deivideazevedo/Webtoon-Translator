@@ -1,11 +1,8 @@
 package com.deivide.webtoontranslator.ui.theme
 
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
 // Mesma paleta do app desktop (tema escuro).
@@ -27,9 +24,8 @@ private val ColorScheme = darkColorScheme(
     error = ErrorText,
 )
 
+/** Tema do app; também usado nas janelas flutuantes (por isso não desenha fundo nenhum). */
 @Composable
 fun WebtoonTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = ColorScheme) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, content = content)
-    }
+    MaterialTheme(colorScheme = ColorScheme, content = content)
 }

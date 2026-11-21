@@ -1,31 +1,24 @@
 package com.deivide.webtoontranslator.ui.home
 
-import com.deivide.webtoontranslator.data.image.Page
+import com.deivide.webtoontranslator.data.library.Library
+import com.deivide.webtoontranslator.data.library.SavedList
+import com.deivide.webtoontranslator.data.settings.ReadingOptions
 import com.deivide.webtoontranslator.domain.model.Translation
 import com.deivide.webtoontranslator.ui.common.UiText
 
 data class HomeUiState(
-    /** OCR carregado (até lá a tela mostra "Preparando o OCR…"). */
-    val engineReady: Boolean = false,
-    val page: Page? = null,
-    /** Cartão de tradução; null = fechado. */
-    val result: ResultState? = null,
-    /** Aviso rápido (snackbar), consumido pela tela com [HomeViewModel.dismissNotice]. */
+    /** Tradutor flutuante ligado. */
+    val floatingRunning: Boolean = false,
+    val tab: SavedList = SavedList.RECENT,
+    val library: Library = Library(),
+    /** Modo de seleção (segurar o dedo num cartão): ids marcados pra excluir. */
+    val selecting: Boolean = false,
+    val selection: Set<String> = emptySet(),
+    val confirmingDelete: Boolean = false,
+    /** Tradução aberta no painel de baixo (o cartão dela fica destacado na lista). */
+    val opened: Translation? = null,
+    val options: ReadingOptions = ReadingOptions(),
     val notice: UiText? = null,
-)
-
-/** Etapas do cartão de tradução. */
-sealed interface ResultState {
-    data object Reading : ResultState
-
-    /** Tradução chegando: cada campo aparece assim que o modelo termina de escrevê-lo. */
-    data class Streaming(
-        val original: String,
-        val translation: String = "",
-        val pronunciation: String = "",
-    ) : ResultState
-
-    data class Done(val translation: Translation) : ResultState
-
-    data class Failed(val message: UiText) : ResultState
+) {
+    val items: List<Translation> get() = library.list(tab)
 }

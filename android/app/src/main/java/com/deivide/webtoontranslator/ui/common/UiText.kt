@@ -1,5 +1,6 @@
 package com.deivide.webtoontranslator.ui.common
 
+import android.content.Context
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
@@ -21,6 +22,13 @@ sealed interface UiText {
 fun UiText.asString(): String = when (this) {
     is UiText.Resource -> stringResource(id, *args.toTypedArray())
     is UiText.Plural -> pluralStringResource(id, count, *args.toTypedArray())
+    is UiText.Raw -> text
+}
+
+/** Versão fora do Compose (ex.: avisos das janelas flutuantes). */
+fun UiText.resolve(context: Context): String = when (this) {
+    is UiText.Resource -> context.getString(id, *args.toTypedArray())
+    is UiText.Plural -> context.resources.getQuantityString(id, count, *args.toTypedArray())
     is UiText.Raw -> text
 }
 
