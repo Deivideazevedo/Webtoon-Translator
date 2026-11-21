@@ -1,0 +1,54 @@
+# Gera os instaladores (Linux: AppImage/deb/rpm, Windows: exe/msi) e cria um rascunho de Release.
+# Dispara ao enviar uma tag de versão:  git tag v0.1.0 && git push origin v0.1.0
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependências do Linux (Tauri + captura de tela)
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev \
+            libpipewire-0.3-dev libspa-0.2-dev libdbus-1-dev libgbm-dev libegl1-mesa-dev \
+            libxcb1-dev libx11-dev libwayland-dev clang libclang-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Modelo de voz (não fica no git)
+        shell: bash
+        run: ./scripts/fetch-models.sh
+
+      - name: Instalar tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: cargo tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: "Webtoon Translator ${{ github.ref_name }}"
+          releaseBody: "Veja o README para instalar e configurar."
+          releaseDraft: true
+          prerelease: false

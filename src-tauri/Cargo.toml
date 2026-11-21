@@ -2,6 +2,8 @@
 name = "webtoon-translator"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Traduz e explica textos em inglês de webtoons e quadrinhos"
 
 [lib]
 name = "webtoon_translator_lib"

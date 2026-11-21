@@ -44,6 +44,12 @@ fn perf_log_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 /// linha JSON em `perf.log`, junto com o consumo de memória do processo naquele instante.
 /// É um log de benchmark temporário — não deve virar telemetria permanente nem painel de UI.
 fn perf_log(app: &tauri::AppHandle, session: &str, event: &str, extra: serde_json::Value) {
+    // Desligado por padrão (o arquivo cresceria pra sempre na máquina de quem usa o app).
+    // Pra medir: WEBTOON_PERF_LOG=1 webtoon-translator
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if !*ENABLED.get_or_init(|| std::env::var("WEBTOON_PERF_LOG").is_ok_and(|v| v == "1")) {
+        return;
+    }
     let mut map = serde_json::Map::new();
     map.insert("ts_ms".into(), serde_json::json!(now_ms()));
     map.insert("session".into(), serde_json::json!(session));
@@ -71,8 +77,19 @@ fn perf_log(app: &tauri::AppHandle, session: &str, event: &str, extra: serde_jso
 
 struct TtsState(std::sync::Mutex<Option<sherpa_onnx::OfflineTts>>);
 
+/// Pasta onde o instalador coloca os modelos (voz, OCR, dicionário). Definida no setup a
+/// partir do resource_dir do Tauri; nos testes, a pasta do código-fonte.
+static RESOURCES_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+fn resources_dir() -> std::path::PathBuf {
+    #[cfg(test)]
+    return std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    #[cfg(not(test))]
+    RESOURCES_DIR.get().cloned().unwrap_or_default()
+}
+
 fn tts_models_dir() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tts-models")
+    resources_dir().join("tts-models")
 }
 
 fn create_tts() -> Result<sherpa_onnx::OfflineTts, String> {
@@ -391,7 +408,7 @@ async fn speak_text(text: String, app: tauri::AppHandle) -> Result<String, Strin
 struct OcrState(std::sync::Mutex<Option<ocrs::OcrEngine>>);
 
 fn ocr_models_dir() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("ocr-models")
+    resources_dir().join("ocr-models")
 }
 
 fn create_ocr_engine() -> Result<ocrs::OcrEngine, String> {
@@ -521,8 +538,10 @@ fn default_speech_speed() -> f32 {
     0.9
 }
 
+/// Instalação nova começa no Google AI Studio: é o único provedor com plano gratuito,
+/// então quem baixa o app só precisa criar uma chave pra começar.
 fn default_provider() -> String {
-    "openai".to_string()
+    "google".to_string()
 }
 
 fn default_anthropic_base_url() -> String {
@@ -1007,42 +1026,125 @@ fn closed_string_field(partial: &str, field: &str) -> Option<String> {
 
 const STREAMED_FIELDS: [&str; 2] = ["original_text", "translation"];
 
-/// Mesma chamada do call_omniroute_text, mas com `stream: true` (SSE no formato OpenAI):
-/// avisa `on_event` assim que o primeiro token chega e assim que original_text/translation
-/// fecham, e devolve o texto completo + tokens de saída (se o gateway informar).
-async fn stream_omniroute_text(
+/// Formato da API de cada provedor (o streaming muda só na requisição e em como ler cada pedaço).
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Wire {
+    OpenAi,
+    Anthropic,
+    Google,
+}
+
+impl Wire {
+    fn from_provider(provider: &str) -> Wire {
+        match provider {
+            "anthropic" => Wire::Anthropic,
+            "google" => Wire::Google,
+            _ => Wire::OpenAi,
+        }
+    }
+}
+
+/// Texto novo que chegou num evento do streaming (None se o evento não traz texto).
+fn stream_delta(wire: Wire, event: &serde_json::Value) -> Option<String> {
+    match wire {
+        Wire::OpenAi => event["choices"][0]["delta"]["content"].as_str().map(str::to_string),
+        // content_block_delta/text_delta; os outros eventos (message_start, ping...) não têm texto.
+        Wire::Anthropic => (event["type"] == "content_block_delta" && event["delta"]["type"] == "text_delta")
+            .then(|| event["delta"]["text"].as_str().map(str::to_string))
+            .flatten(),
+        // Partes marcadas como "thought" são o raciocínio interno do Gemini, não a resposta.
+        Wire::Google => {
+            let parts = event["candidates"][0]["content"]["parts"].as_array()?;
+            let text: String = parts
+                .iter()
+                .filter(|p| p["thought"] != true)
+                .filter_map(|p| p["text"].as_str())
+                .collect();
+            (!text.is_empty()).then_some(text)
+        }
+    }
+}
+
+fn stream_out_tokens(wire: Wire, event: &serde_json::Value) -> Option<u64> {
+    match wire {
+        Wire::OpenAi => event["usage"]["completion_tokens"].as_u64(),
+        Wire::Anthropic => event["usage"]["output_tokens"].as_u64(),
+        Wire::Google => event["usageMetadata"]["candidatesTokenCount"].as_u64(),
+    }
+}
+
+/// Resposta inteira de uma vez (gateway que ignora `stream`).
+fn full_response_text(wire: Wire, body: &serde_json::Value) -> Option<String> {
+    match wire {
+        Wire::OpenAi => body["choices"][0]["message"]["content"].as_str().map(str::to_string),
+        Wire::Anthropic => body["content"][0]["text"].as_str().map(str::to_string),
+        Wire::Google => stream_delta(Wire::Google, body),
+    }
+}
+
+/// Tradução com streaming nos 3 provedores: avisa `on_event` quando o primeiro token chega e
+/// assim que original_text/translation fecham no JSON; devolve o texto completo + tokens de saída.
+async fn stream_translation(
+    wire: Wire,
     extracted_text: &str,
     api_key: &str,
     base_url: &str,
     model: &str,
     on_event: &mut (dyn FnMut(StreamEvent) + Send),
 ) -> Result<(String, Option<u64>), String> {
-    let url = format!("{}/v1/chat/completions", base_url.trim_end_matches('/'));
+    let base = base_url.trim_end_matches('/');
     let user_message = format!(
         "Texto extraído por OCR de uma captura de tela de webtoon:\n\n{extracted_text}"
     );
-    let payload = serde_json::json!({
-        "model": model,
-        "max_tokens": MAX_OUTPUT_TOKENS,
-        "stream": true,
-        "stream_options": {"include_usage": true},
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message}
-        ]
-    });
-    let mut response = http()
-        .post(&url)
-        .bearer_auth(api_key)
-        .json(&payload)
+    let (url, request) = match wire {
+        Wire::OpenAi => {
+            let url = format!("{base}/v1/chat/completions");
+            let req = http().post(&url).bearer_auth(api_key).json(&serde_json::json!({
+                "model": model,
+                "max_tokens": MAX_OUTPUT_TOKENS,
+                "stream": true,
+                "stream_options": {"include_usage": true},
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message}
+                ]
+            }));
+            (url, req)
+        }
+        Wire::Anthropic => {
+            let url = format!("{base}/v1/messages");
+            let req = http()
+                .post(&url)
+                .header("x-api-key", api_key)
+                .header("anthropic-version", ANTHROPIC_VERSION)
+                .json(&serde_json::json!({
+                    "model": model,
+                    "max_tokens": MAX_OUTPUT_TOKENS,
+                    "stream": true,
+                    "system": SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": user_message}]
+                }));
+            (url, req)
+        }
+        Wire::Google => {
+            let url = format!("{base}/v1beta/models/{model}:streamGenerateContent?alt=sse");
+            let req = http().post(&url).header("x-goog-api-key", api_key).json(&serde_json::json!({
+                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                "contents": [{"role": "user", "parts": [{"text": user_message}]}],
+                "generationConfig": {"maxOutputTokens": MAX_OUTPUT_TOKENS}
+            }));
+            (url, req)
+        }
+    };
+
+    let mut response = request
         .send()
         .await
         .map_err(|e| format!("Falha ao conectar em {url}: {e}"))?;
-
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("Gateway respondeu {status}: {body}"));
+        return Err(format!("A API respondeu {status}: {body}"));
     }
 
     let mut pending: Vec<u8> = Vec::new();
@@ -1063,7 +1165,11 @@ async fn stream_omniroute_text(
             let line = String::from_utf8_lossy(&line_bytes);
             let line = line.trim();
             let Some(data) = line.strip_prefix("data:") else {
-                not_sse.push_str(line);
+                // "event: ..." (Anthropic) e ": comentário" fazem parte do SSE; o resto é
+                // resposta sem streaming, guardada pro fallback lá embaixo.
+                if !line.is_empty() && !line.starts_with("event:") && !line.starts_with(':') {
+                    not_sse.push_str(line);
+                }
                 continue;
             };
             let data = data.trim();
@@ -1074,16 +1180,16 @@ async fn stream_omniroute_text(
                 continue;
             };
             if let Some(err) = event.get("error") {
-                return Err(format!("Gateway respondeu erro no meio da resposta: {err}"));
+                return Err(format!("A API respondeu erro no meio da resposta: {err}"));
             }
-            if let Some(n) = event["usage"]["completion_tokens"].as_u64() {
+            if let Some(n) = stream_out_tokens(wire, &event) {
                 out_tokens = Some(n);
             }
-            if let Some(delta) = event["choices"][0]["delta"]["content"].as_str() {
+            if let Some(delta) = stream_delta(wire, &event) {
                 if content.is_empty() && !delta.is_empty() {
                     on_event(StreamEvent::FirstToken);
                 }
-                content.push_str(delta);
+                content.push_str(&delta);
                 for (i, field) in STREAMED_FIELDS.iter().enumerate() {
                     if !sent[i] {
                         if let Some(value) = closed_string_field(&content, field) {
@@ -1097,15 +1203,11 @@ async fn stream_omniroute_text(
     }
 
     if content.is_empty() {
-        // Gateway ignorou o stream e devolveu a resposta normal de uma vez.
         not_sse.push_str(&String::from_utf8_lossy(&pending));
         let body: serde_json::Value = serde_json::from_str(&not_sse)
-            .map_err(|_| format!("Resposta inesperada do gateway: {not_sse}"))?;
-        let text = body["choices"][0]["message"]["content"]
-            .as_str()
-            .ok_or_else(|| "Resposta do gateway sem conteúdo".to_string())?
-            .to_string();
-        return Ok((text, body["usage"]["completion_tokens"].as_u64()));
+            .map_err(|_| format!("Resposta inesperada da API: {not_sse}"))?;
+        let text = full_response_text(wire, &body).ok_or_else(|| "Resposta da API sem conteúdo".to_string())?;
+        return Ok((text, None));
     }
     Ok((content, out_tokens))
 }
@@ -1758,15 +1860,9 @@ async fn do_capture_and_translate(
 
     let _ = lexicon_warm.await;
     let api_started = std::time::Instant::now();
-    let mut out_tokens = None;
-    let raw = match settings.provider.as_str() {
-        "anthropic" => {
-            call_anthropic_text(&extracted_text, &api_key, settings.active_base_url(), &model).await?
-        }
-        "google" => {
-            call_google_text(&extracted_text, &api_key, settings.active_base_url(), &model).await?
-        }
-        _ => {
+    let out_tokens;
+    let raw = {
+        {
             let app_ev = app.clone();
             let session_ev = session.clone();
             let ocr_text = extracted_text.clone();
@@ -1810,7 +1906,8 @@ async fn do_capture_and_translate(
                     );
                 }
             };
-            let (text, tokens) = stream_omniroute_text(
+            let (text, tokens) = stream_translation(
+                Wire::from_provider(&settings.provider),
                 &extracted_text,
                 &api_key,
                 settings.active_base_url(),
@@ -1935,6 +2032,9 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            if let Ok(dir) = app.path().resource_dir() {
+                let _ = RESOURCES_DIR.set(dir);
+            }
             let handle = app.handle().clone();
             if let Ok(settings) = load_settings(handle.clone()) {
                 if settings.always_on_top {
@@ -1995,7 +2095,10 @@ mod tts_smoke_test {
 
 #[cfg(test)]
 mod ocr_smoke_test {
+    /// Precisa de um recorte de balão com "All right, let's start on this side":
+    /// OCR_TEST_IMAGE=/caminho/balao.png cargo test --release -- --ignored ocrs_reads
     #[test]
+    #[ignore]
     fn ocrs_reads_comic_bubble() {
         use ocrs::{ImageSource, OcrEngine, OcrEngineParams};
         use rten::Model;
@@ -2012,7 +2115,7 @@ mod ocr_smoke_test {
         })
         .unwrap();
 
-        let img_path = "/tmp/claude-1000/-home-deivide-Documentos-projetos-chatbackup-web/5a14438b-acf5-4e64-adcf-686a7355fd01/scratchpad/ocr_test.png";
+        let img_path = std::env::var("OCR_TEST_IMAGE").expect("defina OCR_TEST_IMAGE");
         let img = image::open(img_path).unwrap().into_rgb8();
         let img_source = ImageSource::from_bytes(img.as_raw(), img.dimensions()).unwrap();
 
@@ -2056,7 +2159,8 @@ mod streaming_tests {
                 StreamEvent::Field(f, v) => events.push(format!("{ms}ms {f} = {v:?}")),
             }
         };
-        let (text, tokens) = stream_omniroute_text(
+        let (text, tokens) = stream_translation(
+            Wire::OpenAi,
             "AND WHAT HAPPENED TO ITS OTHER ARM?",
             &key,
             "http://localhost",
@@ -2075,6 +2179,53 @@ mod streaming_tests {
         assert_eq!(events.len(), 3);
         assert!(!result.pronunciation_pt.is_empty());
         assert!(result.gloss.len() >= 6, "glosa veio curta: {:?}", result.gloss);
+    }
+
+    #[test]
+    fn le_o_texto_de_cada_formato_de_streaming() {
+        let j = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
+        assert_eq!(stream_delta(Wire::OpenAi, &j(r#"{"choices":[{"delta":{"content":"Oi"}}]}"#)).as_deref(), Some("Oi"));
+        assert_eq!(
+            stream_delta(Wire::Anthropic, &j(r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Oi"}}"#)).as_deref(),
+            Some("Oi")
+        );
+        assert_eq!(stream_delta(Wire::Anthropic, &j(r#"{"type":"ping"}"#)), None);
+        assert_eq!(stream_out_tokens(Wire::Anthropic, &j(r#"{"type":"message_delta","usage":{"output_tokens":42}}"#)), Some(42));
+        // Formato de streamGenerateContent?alt=sse; a parte "thought" (raciocínio) fica de fora.
+        let g = j(r#"{"candidates":[{"content":{"role":"model","parts":[{"text":"pensando...","thought":true},{"text":"{\"original_text\""}]}}],"usageMetadata":{"candidatesTokenCount":7}}"#);
+        assert_eq!(stream_delta(Wire::Google, &g).as_deref(), Some("{\"original_text\""));
+        assert_eq!(stream_out_tokens(Wire::Google, &g), Some(7));
+    }
+
+    /// Formato nativo da Anthropic, via omniroute: OMNI_KEY=... cargo test --release -- --ignored stream_anthropic
+    #[tokio::test]
+    #[ignore]
+    async fn stream_anthropic_real() {
+        let key = std::env::var("OMNI_KEY").expect("defina OMNI_KEY");
+        let started = std::time::Instant::now();
+        let mut fields = Vec::new();
+        let mut on_event = |e: StreamEvent| {
+            if let StreamEvent::Field(f, v) = e {
+                fields.push(format!("{}ms {f} = {v:?}", started.elapsed().as_millis()));
+            }
+        };
+        let (text, tokens) = stream_translation(
+            Wire::Anthropic,
+            "HE DIDN'T GO DOWN WITHOUT A FIGHT.",
+            &key,
+            "http://localhost",
+            "claude/claude-haiku-4-5-20251001",
+            &mut on_event,
+        )
+        .await
+        .unwrap();
+        for f in &fields {
+            println!("{f}");
+        }
+        let r = parse_translation_json(&text).unwrap();
+        println!("{}ms total | {tokens:?} tokens | {} | gloss {}", started.elapsed().as_millis(), r.translation, r.gloss.len());
+        assert_eq!(fields.len(), 2);
+        assert!(tokens.is_some());
     }
 
     #[test]

@@ -226,7 +226,7 @@ function renderHomeList(settings, model) {
       list.innerHTML = `<div class="card empty">Nenhuma tradução favorita ainda.<br>Toque na ☆ de uma tradução em Recentes.</div>`;
     } else if (!settings || !model) {
       list.innerHTML = `<div class="card empty">Nenhuma tradução ainda.<br>
-        Abra as Configurações, cole a chave e a URL do seu gateway, teste a conexão e escolha um modelo.</div>`;
+        Abra as Configurações (⚙), escolha o provedor, cole sua chave de API, teste a conexão e escolha um modelo.</div>`;
     } else {
       list.innerHTML = `<div class="card empty">Configurado com <b>${esc(model)}</b>.<br>
         Capture uma área da tela pra começar a traduzir.</div>`;

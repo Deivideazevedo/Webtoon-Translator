@@ -27,6 +27,23 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Deivide Azevedo",
+    "copyright": "© 2026 Deivide Azevedo",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../LICENSE",
+    "category": "Education",
+    "shortDescription": "Traduz e explica textos em inglês de webtoons e quadrinhos",
+    "longDescription": "Selecione um balão de webtoon na tela: o app lê o texto localmente (OCR), traduz com o modelo de IA que você escolher e explica expressões, gramática e pronúncia, com áudio em inglês gerado no próprio computador.",
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    },
+    "resources": {
+      "tts-models/": "tts-models/",
+      "ocr-models/": "ocr-models/",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
