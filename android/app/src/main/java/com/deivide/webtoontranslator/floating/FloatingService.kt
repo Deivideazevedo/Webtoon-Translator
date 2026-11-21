@@ -197,8 +197,8 @@ class FloatingService : Service(), FloatingIcon.Listener {
         closeMenu()
         mode = newMode
         when (newMode) {
-            TranslationMode.FIXED_REGION ->
-                if (settings.fixedRegion == null) openEditor() else showHint(R.string.fixed_region_hint)
+            // Sempre mostra a área (a salva, se houver) pra conferir/ajustar antes de traduzir.
+            TranslationMode.FIXED_REGION -> openEditor()
             TranslationMode.FULL_SCREEN -> showHint(R.string.full_screen_hint)
             TranslationMode.REGION -> Unit
         }

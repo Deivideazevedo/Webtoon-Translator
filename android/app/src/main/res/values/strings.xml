@@ -42,7 +42,6 @@
     <string name="floating_open_app">📱 Abrir o app</string>
     <string name="floating_armed_hint">Arraste o ícone até o fim do balão e solte</string>
     <string name="fixed_region_select">Ajuste a área e toque em ✓</string>
-    <string name="fixed_region_hint">Toque no ícone pra traduzir a área marcada</string>
     <string name="mode_title">Modo de tradução</string>
     <string name="mode_region">Região</string>
     <string name="mode_fixed_region">Região fixa</string>
