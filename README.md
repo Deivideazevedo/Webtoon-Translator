@@ -33,8 +33,13 @@ chmod +x Webtoon.Translator_*.AppImage
 ./Webtoon.Translator_*.AppImage
 ```
 
-Se não abrir, instale o FUSE 2 (`sudo pacman -S fuse2` no Manjaro/Arch, `sudo apt install libfuse2` no Ubuntu).
-Também há pacotes `.deb` (Debian/Ubuntu) e `.rpm` (Fedora).
+Se não abrir, instale o FUSE 2 (`sudo pacman -S fuse2` no Manjaro/Arch, `sudo apt install libfuse2t64` no Ubuntu).
+Também há pacotes `.deb` (Debian/Ubuntu/Mint) e `.rpm` (Fedora/openSUSE), que aparecem no menu de aplicativos e
+desinstalam pelo gerenciador de pacotes.
+
+Sistemas suportados: Ubuntu 24.04 ou mais novo, Linux Mint 22+, Pop!_OS 24.04+, Fedora 40+, Debian 13+, Manjaro e
+Arch. Versões mais antigas (Ubuntu 22.04, Mint 21, Debian 12) não são suportadas: atualize o sistema, o que também
+traz as correções de segurança mais recentes.
 
 **Windows** — baixe e rode o instalador `.exe` (ou o `.msi`). Como o app não tem assinatura digital paga,
 o Windows pode mostrar "O Windows protegeu o computador": clique em **Mais informações → Executar assim mesmo**.
