@@ -1,0 +1,3 @@
+[build]
+# Mesmo target do desktop: o core não recompila à toa e não duplica espaço em disco.
+target-dir = "../../src-tauri/target"

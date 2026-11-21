@@ -1,0 +1,21 @@
+[package]
+name = "webtoon-android"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Ponte entre o núcleo Rust (core/) e o app Android, via UniFFI"
+
+[lib]
+name = "webtoon_android"
+crate-type = ["cdylib", "lib"]
+
+# Gera os bindings Kotlin a partir da .so compilada (ver android/build-rust.sh).
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[dependencies]
+# Sem a feature kokoro: no Android a voz padrão é o TTS do próprio sistema.
+webtoon-core = { path = "../../core", default-features = false }
+uniffi = { version = "0.32", features = ["tokio", "cli"] }
+thiserror = "2"
