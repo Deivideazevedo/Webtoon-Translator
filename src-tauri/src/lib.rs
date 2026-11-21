@@ -481,6 +481,9 @@ struct Settings {
     google_model: String,
     #[serde(default)]
     favorites: std::collections::HashMap<String, Vec<String>>,
+    /// Opacidade do fundo do balão (0.3–1.0): translúcido pra não esconder a arte do webtoon.
+    #[serde(default = "default_bubble_opacity")]
+    bubble_opacity: f32,
 }
 
 impl Settings {
@@ -509,6 +512,10 @@ fn default_speech_speed() -> f32 {
     0.9
 }
 
+fn default_bubble_opacity() -> f32 {
+    0.85
+}
+
 /// Instalação nova começa no Google AI Studio: é o único provedor com plano gratuito,
 /// então quem baixa o app só precisa criar uma chave pra começar.
 fn default_provider() -> String {
@@ -531,6 +538,7 @@ impl Default for Settings {
             always_on_top: false,
             shortcut: default_shortcut(),
             speech_speed: default_speech_speed(),
+            bubble_opacity: default_bubble_opacity(),
             provider: default_provider(),
             anthropic_base_url: default_anthropic_base_url(),
             anthropic_model: String::new(),

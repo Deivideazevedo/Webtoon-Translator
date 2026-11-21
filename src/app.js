@@ -28,6 +28,8 @@ const shortcutBtn = document.getElementById("shortcut_btn");
 const shortcutStatus = document.getElementById("shortcut_status");
 const speechSpeedInput = document.getElementById("speech_speed");
 const speechSpeedValue = document.getElementById("speech_speed_value");
+const bubbleOpacityInput = document.getElementById("bubble_opacity");
+const bubbleOpacityValue = document.getElementById("bubble_opacity_value");
 
 const PROVIDER_LABELS = {
   openai: "Gateway OpenAI",
@@ -58,6 +60,22 @@ alwaysOnTopInput.addEventListener("change", async () => {
     await invoke("save_settings", { settings: { ...current, always_on_top: enabled } });
   } catch (e) {
     console.error("Falha ao salvar preferência de fixar janela:", e);
+  }
+});
+
+// Opacidade do balão: aplica ao vivo no balão aberto enquanto arrasta, salva ao soltar.
+bubbleOpacityInput.addEventListener("input", () => {
+  const opacity = Number(bubbleOpacityInput.value);
+  bubbleOpacityValue.textContent = `${Math.round(opacity * 100)}%`;
+  window.__TAURI__.event.emitTo("bubble", "bubble-style", { opacity }).catch(() => {});
+});
+
+bubbleOpacityInput.addEventListener("change", async () => {
+  try {
+    const current = await invoke("load_settings");
+    await invoke("save_settings", { settings: { ...current, bubble_opacity: Number(bubbleOpacityInput.value) } });
+  } catch (e) {
+    console.error("Falha ao salvar a opacidade do balão:", e);
   }
 });
 
@@ -607,6 +625,9 @@ async function openSettings() {
   const speed = (currentSettings && currentSettings.speech_speed) || 0.9;
   speechSpeedInput.value = speed;
   speechSpeedValue.textContent = `${Number(speed).toFixed(2)}x`;
+  const opacity = (currentSettings && currentSettings.bubble_opacity) || 0.85;
+  bubbleOpacityInput.value = opacity;
+  bubbleOpacityValue.textContent = `${Math.round(opacity * 100)}%`;
 
   await applyProviderToUI(providerSelect.value);
 }
@@ -921,6 +942,9 @@ importFile.addEventListener("change", async () => {
     const speed = (currentSettings && currentSettings.speech_speed) || 0.9;
     speechSpeedInput.value = speed;
     speechSpeedValue.textContent = `${Number(speed).toFixed(2)}x`;
+    const opacity = (currentSettings && currentSettings.bubble_opacity) || 0.85;
+    bubbleOpacityInput.value = opacity;
+    bubbleOpacityValue.textContent = `${Math.round(opacity * 100)}%`;
     shortcutBtn.textContent = (currentSettings && currentSettings.shortcut) || "CommandOrControl+Shift+T";
     providerSelect.value = (currentSettings && currentSettings.provider) || "openai";
     await applyProviderToUI(providerSelect.value);

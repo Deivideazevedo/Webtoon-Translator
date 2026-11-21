@@ -273,6 +273,18 @@ copyBtn.addEventListener("click", async () => {
   setTimeout(() => (copyBtn.textContent = "📋 Copiar"), 1500);
 });
 
+// --- Opacidade do fundo (Configurações → Geral). Muda ao vivo enquanto o slider é arrastado. ---
+const card = document.querySelector(".bubble-card");
+function applyOpacity(value) {
+  const alpha = Math.min(1, Math.max(0.3, Number(value) || 0.85));
+  document.documentElement.style.setProperty("--bubble-alpha", alpha);
+  card.classList.toggle("translucent", alpha < 0.95);
+}
+invoke("load_settings")
+  .then((s) => applyOpacity(s && s.bubble_opacity))
+  .catch(() => applyOpacity(0.85));
+listen("bubble-style", (e) => applyOpacity(e.payload.opacity));
+
 // O listener entra antes de buscar o estado: atualizações que chegarem enquanto a janela
 // carrega não se perdem. Se algum evento já renderizou, o estado buscado (possivelmente
 // mais velho) é ignorado.

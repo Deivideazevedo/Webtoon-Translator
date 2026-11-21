@@ -6,8 +6,11 @@
 <link rel="stylesheet" href="style.css">
 <style>
   html, body { background: transparent; padding: 0; }
+  /* --bubble-alpha vem da configuração "Opacidade do balão" (bubble.js). Só o FUNDO fica
+     translúcido; o texto continua opaco e ganha sombra pra não sumir em cima da arte. */
+  :root { --bubble-alpha: .85; }
   .bubble-card {
-    background: var(--card);
+    background: rgba(var(--card-rgb), var(--bubble-alpha));
     border: 1px solid var(--border);
     border-radius: 12px;
     overflow: hidden;
@@ -20,7 +23,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 10px 6px 12px;
-    background: var(--bg);
+    background: rgba(var(--bg-rgb), var(--bubble-alpha));
     border-bottom: 1px solid var(--border);
     cursor: move;
     font-size: 12px;
@@ -37,6 +40,7 @@
     font-size: 11px;
     color: var(--muted);
   }
+  .bubble-card.translucent { text-shadow: var(--text-shadow); }
   .bubble-foot #bubble_meta { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Camada 1: tradução (o que se lê primeiro) */
@@ -96,6 +100,7 @@
     font-size: 12px;
     font-style: normal;
     font-weight: normal;
+    text-shadow: none;
     white-space: nowrap;
     pointer-events: none;
   }
