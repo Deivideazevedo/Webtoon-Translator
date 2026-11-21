@@ -19,32 +19,74 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: 6px 10px 6px 12px;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
     cursor: move;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--muted);
     user-select: none;
   }
-  .bubble-body { padding: 12px; overflow-y: auto; flex: 1; font-size: 13px; }
-  .bubble-body .chunk { border-top: 1px solid var(--border); padding: 8px 0; }
-  .bubble-body .chunk:first-child { border-top: none; }
-  .bubble-body .chunk-head { display: flex; align-items: center; gap: 6px; }
-  .bubble-body .segment { font-weight: 600; color: var(--accent); }
-  .bubble-body .pron { color: var(--muted); font-size: 12px; }
-  .bubble-body .note { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .bubble-body .translation { font-size: 15px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
-  .bubble-body .original { color: var(--muted); font-style: italic; }
-  .bubble-body .skeleton { color: var(--muted); font-style: italic; }
-  .bubble-body { overflow-x: hidden; }
-  .bubble-body .w { position: relative; cursor: help; border-bottom: 1px dotted transparent; }
-  .bubble-body .w:hover { color: var(--text); border-bottom-color: var(--accent); }
-  .bubble-body .w:hover::after {
+  .bubble-body { padding: 12px; overflow-y: auto; overflow-x: hidden; flex: 1; font-size: 13px; }
+  .bubble-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px 6px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .bubble-foot #bubble_meta { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Camada 1: tradução (o que se lê primeiro) */
+  .translation { font-size: 16px; line-height: 1.35; margin-bottom: 8px; }
+  /* Camada 2: original + áudio + pronúncia */
+  .original { color: var(--text); opacity: .85; font-size: 13px; line-height: 1.5; }
+  .pron-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; color: var(--text); opacity: .75; font-size: 12px; }
+  .pron-row .pron-text { flex: 1; }
+  /* Um balão por linha, como no quadrinho. */
+  .original, .pron-text { white-space: pre-line; }
+  .skeleton { color: var(--muted); font-style: italic; }
+  .error-line { color: var(--danger); font-size: 13px; }
+
+  /* Camada 3: "Aprender" (fechado por padrão = modo compacto) */
+  .learn { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .learn-toggle { background: none; border: none; color: var(--accent); padding: 2px 0; font-size: 13px; }
+  .learn-tabs { display: flex; gap: 4px; margin: 6px 0 4px; }
+  .learn-tabs button {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 999px; padding: 2px 10px; font-size: 12px;
+  }
+  .learn-tabs button.active { color: var(--accent); border-color: var(--accent); }
+  .chunk { border-top: 1px solid var(--border); padding: 8px 0; }
+  .chunk:first-child { border-top: none; }
+  .chunk-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .segment { font-weight: 600; color: var(--accent); }
+  .meaning { margin-top: 2px; }
+  .note { color: var(--text); opacity: .8; font-size: 13px; margin-top: 2px; line-height: 1.4; }
+
+  .speak, .mini {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0 6px;
+    font-size: 12px;
+    line-height: 20px;
+    flex-shrink: 0;
+  }
+  .original .speak { margin-left: 4px; vertical-align: middle; }
+
+  /* Hover com a tradução literal: aparece ACIMA da palavra pra o cursor não cobrir. */
+  .w { position: relative; cursor: help; border-bottom: 1px dotted var(--border); }
+  .w:hover { border-bottom-color: var(--accent); color: var(--text); opacity: 1; }
+  .w:hover::after {
     content: attr(data-gloss);
     position: absolute;
     left: 0;
-    top: calc(100% + 4px);
+    bottom: calc(100% + 4px);
     z-index: 10;
     background: var(--bg);
     color: var(--text);
@@ -53,28 +95,24 @@
     padding: 2px 8px;
     font-size: 12px;
     font-style: normal;
+    font-weight: normal;
     white-space: nowrap;
     pointer-events: none;
   }
-  .bubble-body .original-pron { color: var(--muted); font-size: 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-  .speak {
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    cursor: pointer;
-    padding: 1px 6px;
-    font-size: 12px;
-    flex-shrink: 0;
-  }
+  .w.th:hover::after { white-space: normal; width: 220px; }
 </style>
 </head>
 <body>
   <div class="bubble-card">
     <div class="bubble-head" data-tauri-drag-region>
-      <span data-tauri-drag-region>↕ <span id="bubble_model">Tradução</span></span>
-      <button id="close_btn" class="secondary icon-btn" style="width:22px;height:22px;font-size:12px;" type="button">✕</button>
+      <span data-tauri-drag-region>↕ Tradução</span>
+      <button id="close_btn" class="secondary icon-btn" style="width:22px;height:22px;font-size:12px;" type="button" title="Fechar (Esc)">✕</button>
     </div>
     <div class="bubble-body" id="content">Carregando...</div>
+    <div class="bubble-foot">
+      <span id="bubble_meta"></span>
+      <button id="copy_btn" class="mini" type="button" title="Copiar original + tradução">📋 Copiar</button>
+    </div>
   </div>
   <script src="bubble.js"></script>
 </body>

@@ -97,7 +97,8 @@ fn consonant(ph: &str) -> &str {
     match ph {
         "ɡ" => "g",
         "ŋ" => "n",
-        "θ" => "f",
+        // Sem equivalente em português (nem "f" nem "t"): mantém "th" e o balão explica no hover.
+        "θ" => "th",
         "ð" => "d",
         "ʃ" => "ch",
         "ʒ" => "j",
@@ -304,8 +305,10 @@ mod tests {
         let p = pronounce(&lex_path(), "And what happened to its other arm?").unwrap();
         assert_eq!(p.ptbr, "énd uât RÉ-pend tu its Â-der árm?");
         let p = pronounce(&lex_path(), "I didn't think you'd go that far, kid.").unwrap();
-        assert!(p.ptbr.contains("fink"), "{}", p.ptbr);
+        assert!(p.ptbr.contains("think"), "{}", p.ptbr);
         assert!(p.ptbr.contains("dét"), "{}", p.ptbr);
+        let p = pronounce(&lex_path(), "Thank you").unwrap();
+        assert_eq!(p.ptbr, "thénk iu");
         let p = pronounce(&lex_path(), "really, the party").unwrap();
         assert!(p.ptbr.starts_with("RÍ-li") || p.ptbr.starts_with("RI-li"), "{}", p.ptbr);
         assert!(p.ptbr.contains("PÁ-ri"), "{}", p.ptbr);

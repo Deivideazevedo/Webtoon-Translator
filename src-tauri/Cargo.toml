@@ -25,3 +25,4 @@ tauri-plugin-global-shortcut = "2.4"
 ocrs = "0.14"
 rten = "0.28"
 sysinfo = { version = "0.40.4", default-features = false, features = ["system"] }
+tauri-plugin-dialog = "2"

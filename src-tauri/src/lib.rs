@@ -200,6 +200,11 @@ fn synthesize_speech(app: &tauri::AppHandle, text: &str, session: &str) -> Resul
     if let Some(url) = tts_cache_get(app, &key) {
         return Ok((url, true));
     }
+    // Áudio de favorito sobrevive a fechar o app: lê do disco sem precisar do motor de voz.
+    if let Some(url) = read_favorite_audio(app, text) {
+        tts_cache_put(app, key, url.clone());
+        return Ok((url, true));
+    }
 
     let state = app.state::<TtsState>();
     let mut guard = state.0.lock().map_err(|_| "Estado do TTS corrompido".to_string())?;
@@ -220,7 +225,101 @@ fn synthesize_speech(app: &tauri::AppHandle, text: &str, session: &str) -> Resul
         .ok_or_else(|| "Falha ao gerar áudio".to_string())?;
     let url = wav_data_url(audio.samples(), audio.sample_rate() as u32);
     tts_cache_put(app, key, url.clone());
+    if is_favorite_text(app, text) {
+        save_favorite_audio(app, text, &url);
+    }
     Ok((url, false))
+}
+
+// --- Áudio dos favoritos em disco ---
+// Um .wav por TEXTO falado (não por favorito): a mesma frase favoritada em dois modelos
+// compartilha o arquivo, e ele só é apagado quando nenhum favorito usa mais aquele texto.
+
+/// FNV-1a 64: hash estável entre versões do Rust (o DefaultHasher não garante isso), pra o
+/// nome do arquivo continuar o mesmo depois de atualizar o app.
+fn fnv1a64(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3))
+}
+
+fn favorite_audio_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = data_file(app, "favorite_audio")?;
+    fs::create_dir_all(&dir).map_err(|e| format!("Não consegui criar a pasta de áudios: {e}"))?;
+    Ok(dir)
+}
+
+fn favorite_audio_name(text: &str) -> String {
+    format!("{:016x}.wav", fnv1a64(&tts_cache_key(text, TTS_SYNTH_SPEED)))
+}
+
+/// Textos que viram áudio numa tradução: a frase original e cada trecho do breakdown.
+fn speech_texts(t: &TranslationResult) -> Vec<String> {
+    std::iter::once(t.original_text.clone())
+        .chain(t.breakdown.iter().map(|b| b.segment.clone()))
+        .filter(|s| !s.trim().is_empty())
+        .collect()
+}
+
+fn read_favorite_audio(app: &tauri::AppHandle, text: &str) -> Option<String> {
+    let bytes = fs::read(favorite_audio_dir(app).ok()?.join(favorite_audio_name(text))).ok()?;
+    Some(format!(
+        "data:audio/wav;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
+fn save_favorite_audio(app: &tauri::AppHandle, text: &str, data_url: &str) {
+    let Some(b64) = data_url.split_once("base64,").map(|(_, b)| b) else { return };
+    let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) else { return };
+    if let Ok(dir) = favorite_audio_dir(app) {
+        let _ = fs::write(dir.join(favorite_audio_name(text)), bytes);
+    }
+}
+
+fn is_favorite_text(app: &tauri::AppHandle, text: &str) -> bool {
+    let key = normalize_for_speech(text);
+    read_translations(app, FAVORITES_FILE)
+        .unwrap_or_default()
+        .iter()
+        .flat_map(speech_texts)
+        .any(|t| normalize_for_speech(&t) == key)
+}
+
+/// Garante o .wav de cada texto em background (usa o cache se já foi gerado; senão sintetiza).
+/// Avisa a tela principal no fim, pra atualizar o espaço ocupado.
+fn ensure_favorite_audio(app: tauri::AppHandle, texts: Vec<String>) {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Ok(dir) = favorite_audio_dir(&app) else { return };
+        let mut saved = 0;
+        for text in texts {
+            if dir.join(favorite_audio_name(&text)).exists() {
+                continue;
+            }
+            if let Ok((url, _)) = synthesize_speech(&app, &text, "favorite-audio") {
+                save_favorite_audio(&app, &text, &url);
+                saved += 1;
+            }
+        }
+        if saved > 0 {
+            let _ = app.emit("favorites-changed", ());
+        }
+    });
+}
+
+/// Apaga os .wav que nenhum favorito usa mais.
+fn gc_favorite_audio(app: &tauri::AppHandle) {
+    let Ok(dir) = favorite_audio_dir(app) else { return };
+    let used: std::collections::HashSet<String> = read_translations(app, FAVORITES_FILE)
+        .unwrap_or_default()
+        .iter()
+        .flat_map(speech_texts)
+        .map(|t| favorite_audio_name(&t))
+        .collect();
+    for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.ends_with(".wav") && !used.contains(&name) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
 }
 
 /// Gera áudios em segundo plano, em fila (o motor é um só), pra quando o usuário clicar
@@ -348,11 +447,12 @@ nesta ordem exata de campos:\n\
 Regras:\n\
 - original_text e translation em sentence case (nunca copie a caixa alta do quadrinho). Separe balões com \"\\n\".\n\
 - translation: português brasileiro natural, preservando a nuance (gíria, intensidade, tom).\n\
-- breakdown: de 1 a 3 trechos. Inclua toda expressão idiomática, phrasal verb ou gíria presente; complete com o \
-que mais ensina (armadilha gramatical, falso cognato). Nunca repita a frase inteira como trecho. segment deve \
+- breakdown: de 1 a 3 trechos. Priorize phrasal verbs e expressões cujo sentido muda em relação às palavras \
+soltas (ex.: \"go down\" é literalmente \"descer/cair\", mas em \"go down without a fight\" é \"se render\"); \
+depois gírias, armadilhas gramaticais e falsos cognatos. Nunca repita a frase inteira como trecho. segment deve \
 aparecer exatamente assim em original_text.\n\
-- meaning: tradução curta do trecho no contexto. note: no máximo 1 frase dizendo por que não é literal ou o que \
-ensina; sem especular sobre história ou personagens.\n\
+- meaning: o sentido do trecho neste contexto. note: no máximo 1 frase; quando o sentido não for literal, comece \
+com \"Literal: … → aqui: …\"; sem especular sobre história ou personagens.\n\
 - grammar_notes: no máximo 1 frase.\n\
 - gloss: tradução literal, palavra por palavra, de CADA palavra de original_text na ordem (sem pontuação), com o \
 sentido que ela tem nesta frase. Contrações viram 1 item (\"let's\" = \"vamos\"). Pode ficar estranho em português, \
@@ -500,6 +600,9 @@ struct TranslationResult {
     /// true enquanto a resposta ainda está chegando (o balão mostra o que já tem + skeleton).
     #[serde(default)]
     pending: bool,
+    /// Epoch ms da captura: identifica a tradução nos recentes/favoritos e ordena por data.
+    #[serde(default)]
+    id: String,
     /// [palavra, tradução literal] na ordem de original_text, pro hover no balão.
     #[serde(default, deserialize_with = "lenient_gloss")]
     gloss: Vec<(String, String)>,
@@ -534,6 +637,10 @@ fn get_bubble_data(state: tauri::State<BubbleState>) -> Option<TranslationResult
 fn update_bubble(app: &tauri::AppHandle, result: &TranslationResult) {
     *app.state::<BubbleState>().0.lock().unwrap() = Some(result.clone());
     let _ = app.emit_to("bubble", "bubble-update", result.clone());
+    // Só a versão final tem id: é ela que a lista da janela principal destaca como ativa.
+    if !result.pending && !result.id.is_empty() {
+        let _ = app.emit_to("main", "bubble-changed", ());
+    }
 }
 
 fn lexicon_path() -> std::path::PathBuf {
@@ -738,6 +845,21 @@ fn resolve_monitor_region(
 #[tauri::command]
 fn close_window(window: tauri::WebviewWindow) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
+}
+
+/// O balão ajusta a própria altura ao conteúdo (modo compacto pequeno, "Aprender" maior).
+/// A largura continua sendo a que o usuário escolher.
+#[tauri::command]
+fn fit_bubble_height(window: tauri::WebviewWindow, height: f64) -> Result<(), String> {
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let size = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let height = height.clamp(120.0, 640.0);
+    if (size.height - height).abs() < 2.0 {
+        return Ok(());
+    }
+    window
+        .set_size(tauri::LogicalSize::new(size.width, height))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1079,6 +1201,11 @@ const BENCH_FINALISTS: usize = 8;
 const BENCH_EXTRA_RUNS: usize = 2;
 const BENCH_FAVORITES: usize = 5;
 
+/// Alguns modelos (ex.: qwen) às vezes "escapam" pro chinês no meio do português.
+fn has_cjk(text: &str) -> bool {
+    text.chars().any(|c| matches!(c as u32, 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xAC00..=0xD7AF))
+}
+
 /// Tempo até o JSON completo de uma tradução de teste. Conta como falha se estourar o
 /// timeout ou se a resposta não vier no formato esperado (rápido mas inútil não serve).
 async fn timed_translation(provider: &str, base_url: &str, api_key: &str, model: &str) -> Result<f64, String> {
@@ -1096,6 +1223,9 @@ async fn timed_translation(provider: &str, base_url: &str, api_key: &str, model:
     let parsed = parse_translation_json(&raw).map_err(|_| "resposta fora do JSON esperado".to_string())?;
     if parsed.translation.trim().is_empty() {
         return Err("resposta sem tradução".to_string());
+    }
+    if has_cjk(&parsed.translation) {
+        return Err("tradução veio misturada com chinês/japonês".to_string());
     }
     Ok(started.elapsed().as_secs_f64())
 }
@@ -1241,34 +1371,264 @@ async fn benchmark_models(
     Ok(entries)
 }
 
-const MAX_HISTORY: usize = 5;
+/// Recentes guardam todas as traduções (inclusive a mesma frase em modelos diferentes, pra
+/// comparar); o usuário limpa pela seleção na tela. Favoritos ficam num arquivo à parte, sem limite.
+const MAX_HISTORY: usize = 20;
 
-fn history_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+fn data_file(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathBuf, String> {
     let dir = app
         .path()
         .app_config_dir()
         .map_err(|e| format!("Não achei a pasta de configuração: {e}"))?;
     fs::create_dir_all(&dir).map_err(|e| format!("Não consegui criar a pasta de configuração: {e}"))?;
-    Ok(dir.join("history.json"))
+    Ok(dir.join(name))
 }
 
-#[tauri::command]
-fn load_history(app: tauri::AppHandle) -> Result<Vec<TranslationResult>, String> {
-    let path = history_path(&app)?;
+const HISTORY_FILE: &str = "history.json";
+const FAVORITES_FILE: &str = "favorite_translations.json";
+
+fn read_translations(app: &tauri::AppHandle, file: &str) -> Result<Vec<TranslationResult>, String> {
+    let path = data_file(app, file)?;
     if !path.exists() {
         return Ok(Vec::new());
     }
     let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    Ok(serde_json::from_str(&raw).unwrap_or_default())
+    let mut list: Vec<TranslationResult> = serde_json::from_str(&raw).unwrap_or_default();
+    // Traduções de antes de existir `id`: ganham um agora e o arquivo é regravado, pra o id
+    // ficar estável (favoritar/excluir dependem dele).
+    if list.iter().any(|t| t.id.is_empty()) {
+        let base = now_ms();
+        for (i, t) in list.iter_mut().enumerate().filter(|(_, t)| t.id.is_empty()) {
+            t.id = (base - i as u128).to_string();
+        }
+        write_translations(app, file, &list)?;
+    }
+    Ok(list)
+}
+
+fn write_translations(app: &tauri::AppHandle, file: &str, list: &[TranslationResult]) -> Result<(), String> {
+    let raw = serde_json::to_string_pretty(list).map_err(|e| e.to_string())?;
+    fs::write(data_file(app, file)?, raw).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn load_history(app: tauri::AppHandle) -> Result<Vec<TranslationResult>, String> {
+    read_translations(&app, HISTORY_FILE)
+}
+
+#[tauri::command]
+fn load_favorite_translations(app: tauri::AppHandle) -> Result<Vec<TranslationResult>, String> {
+    read_translations(&app, FAVORITES_FILE)
 }
 
 fn append_history(app: &tauri::AppHandle, entry: TranslationResult) -> Result<(), String> {
-    let path = history_path(app)?;
-    let mut list = load_history(app.clone())?;
+    let mut list = read_translations(app, HISTORY_FILE)?;
     list.insert(0, entry);
     list.truncate(MAX_HISTORY);
-    let raw = serde_json::to_string_pretty(&list).map_err(|e| e.to_string())?;
-    fs::write(&path, raw).map_err(|e| e.to_string())
+    write_translations(app, HISTORY_FILE, &list)
+}
+
+#[tauri::command]
+fn set_translation_favorite(app: tauri::AppHandle, entry: TranslationResult, favorite: bool) -> Result<(), String> {
+    let mut list = read_translations(&app, FAVORITES_FILE)?;
+    list.retain(|t| t.id != entry.id);
+    let texts = speech_texts(&entry);
+    if favorite {
+        list.insert(0, entry);
+    }
+    write_translations(&app, FAVORITES_FILE, &list)?;
+    if favorite {
+        ensure_favorite_audio(app, texts);
+    } else {
+        gc_favorite_audio(&app);
+    }
+    Ok(())
+}
+
+/// `list`: "recent" ou "favorites".
+#[tauri::command]
+fn delete_translations(app: tauri::AppHandle, list: String, ids: Vec<String>) -> Result<(), String> {
+    let file = if list == "favorites" { FAVORITES_FILE } else { HISTORY_FILE };
+    let mut items = read_translations(&app, file)?;
+    items.retain(|t| !ids.contains(&t.id));
+    write_translations(&app, file, &items)?;
+    if file == FAVORITES_FILE {
+        gc_favorite_audio(&app);
+    }
+    Ok(())
+}
+
+// --- Backup: exportar/importar tudo num JSON ---
+
+const BACKUP_FORMAT: &str = "webtoon-translator-backup";
+const PROVIDERS: [&str; 3] = ["openai", "anthropic", "google"];
+
+/// Data UTC "AAAA-MM-DD_HH-MM" a partir de epoch ms (algoritmo days-from-civil do Howard Hinnant),
+/// só pra dar nome legível ao arquivo sem puxar uma crate de datas.
+fn utc_stamp(ms: u128) -> String {
+    let secs = (ms / 1000) as i64;
+    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    format!("{y:04}-{m:02}-{d:02}_{:02}-{:02}", rem / 3600, rem % 3600 / 60)
+}
+
+/// Abre o "Salvar como" do sistema (começando em Downloads) e grava o backup lá.
+/// Devolve o caminho escolhido, ou None se o usuário cancelar.
+#[tauri::command]
+async fn export_data(app: tauri::AppHandle, include_keys: bool) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let mut keys = serde_json::Map::new();
+    if include_keys {
+        for p in PROVIDERS {
+            if let Some(k) = get_api_key(p.to_string())? {
+                keys.insert(p.to_string(), serde_json::json!(k));
+            }
+        }
+    }
+    let now = now_ms();
+    let backup = serde_json::json!({
+        "format": BACKUP_FORMAT,
+        "version": 1,
+        "exported_at_ms": now,
+        "settings": load_settings(app.clone())?,
+        "api_keys": keys,
+        "history": read_translations(&app, HISTORY_FILE)?,
+        "favorite_translations": read_translations(&app, FAVORITES_FILE)?,
+    });
+    let raw = serde_json::to_string_pretty(&backup).map_err(|e| e.to_string())?;
+
+    let mut dialog = app
+        .dialog()
+        .file()
+        .set_title("Salvar backup do Webtoon Translator")
+        .set_file_name(format!("webtoon-translator-backup_{}.json", utc_stamp(now)))
+        .add_filter("Backup (JSON)", &["json"]);
+    if let Ok(dir) = app.path().download_dir() {
+        dialog = dialog.set_directory(dir);
+    }
+    // O diálogo bloqueia até o usuário escolher: roda fora do runtime async.
+    let chosen = tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file())
+        .await
+        .map_err(|e| e.to_string())?;
+    let Some(chosen) = chosen else {
+        return Ok(None);
+    };
+    let path = chosen.into_path().map_err(|e| format!("Caminho inválido: {e}"))?;
+    fs::write(&path, raw).map_err(|e| format!("Não consegui salvar o backup: {e}"))?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// Quanto os recentes e favoritos ocupam em disco (bytes), pro usuário administrar o espaço.
+#[tauri::command]
+fn storage_usage(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let size = |file: &str| -> Result<u64, String> {
+        let path = data_file(&app, file)?;
+        Ok(fs::metadata(path).map(|m| m.len()).unwrap_or(0))
+    };
+    let audio_bytes: u64 = fs::read_dir(favorite_audio_dir(&app)?)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| e.metadata().ok())
+        .map(|m| m.len())
+        .sum();
+    Ok(serde_json::json!({
+        "history_bytes": size(HISTORY_FILE)?,
+        "favorites_bytes": size(FAVORITES_FILE)?,
+        "favorites_audio_bytes": audio_bytes,
+        "history_max": MAX_HISTORY,
+    }))
+}
+
+/// Junta duas listas sem repetir id, mais recente primeiro (o id é o epoch ms da captura).
+fn merge_translations(local: Vec<TranslationResult>, imported: Vec<TranslationResult>) -> Vec<TranslationResult> {
+    let mut all = local;
+    for t in imported {
+        if !all.iter().any(|x| x.id == t.id) {
+            all.push(t);
+        }
+    }
+    all.sort_by_key(|t| std::cmp::Reverse(t.id.parse::<u128>().unwrap_or(0)));
+    all
+}
+
+/// Configurações e chaves do arquivo substituem as atuais; favoritos de modelos, traduções
+/// recentes e favoritas são somados (nada que já existe aqui é apagado).
+#[tauri::command]
+fn import_data(app: tauri::AppHandle, json: String) -> Result<String, String> {
+    let backup: serde_json::Value =
+        serde_json::from_str(&json).map_err(|_| "Esse arquivo não é um JSON válido.".to_string())?;
+    if backup["format"] != BACKUP_FORMAT {
+        return Err("Esse arquivo não é um backup do Webtoon Translator.".to_string());
+    }
+
+    let mut summary = Vec::new();
+    if !backup["settings"].is_null() {
+        let mut imported: Settings = serde_json::from_value(backup["settings"].clone())
+            .map_err(|e| format!("Configurações do backup inválidas: {e}"))?;
+        let local = load_settings(app.clone())?;
+        for (provider, favs) in local.favorites {
+            let merged = imported.favorites.entry(provider).or_default();
+            for m in favs {
+                if !merged.contains(&m) {
+                    merged.push(m);
+                }
+            }
+        }
+        if let Err(e) = apply_shortcut(&app, &imported.shortcut) {
+            eprintln!("Atalho do backup não pôde ser registrado: {e}");
+        }
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.set_always_on_top(imported.always_on_top);
+        }
+        save_settings(app.clone(), imported)?;
+        summary.push("configurações".to_string());
+    }
+
+    let mut keys = 0;
+    if let Some(map) = backup["api_keys"].as_object() {
+        for (provider, key) in map {
+            if let (true, Some(k)) = (PROVIDERS.contains(&provider.as_str()), key.as_str()) {
+                save_api_key(provider.clone(), k.to_string())?;
+                keys += 1;
+            }
+        }
+    }
+    if keys > 0 {
+        summary.push(format!("{keys} chave(s) de API"));
+    }
+
+    for (field, file, label) in [
+        ("history", HISTORY_FILE, "recentes"),
+        ("favorite_translations", FAVORITES_FILE, "favoritas"),
+    ] {
+        let imported: Vec<TranslationResult> = serde_json::from_value(backup[field].clone()).unwrap_or_default();
+        if imported.is_empty() {
+            continue;
+        }
+        let n = imported.len();
+        let mut merged = merge_translations(read_translations(&app, file)?, imported);
+        if file == HISTORY_FILE {
+            merged.truncate(MAX_HISTORY);
+        }
+        write_translations(&app, file, &merged)?;
+        summary.push(format!("{n} traduções {label}"));
+    }
+    let favorite_texts: Vec<String> = read_translations(&app, FAVORITES_FILE)?.iter().flat_map(speech_texts).collect();
+    if !favorite_texts.is_empty() {
+        ensure_favorite_audio(app.clone(), favorite_texts);
+        summary.push("áudios dos favoritos sendo gerados em segundo plano".to_string());
+    }
+    Ok(format!("Importado: {}.", summary.join(", ")))
 }
 
 #[tauri::command]
@@ -1286,6 +1646,7 @@ fn open_bubble_window(
         let state = app.state::<BubbleState>();
         *state.0.lock().unwrap() = Some(result.clone());
     }
+    let _ = app.emit_to("main", "bubble-changed", ());
 
     if let Some(win) = app.get_webview_window("bubble") {
         // Reaproveita a janela onde quer que o usuário a tenha deixado — não reposiciona.
@@ -1478,6 +1839,7 @@ async fn do_capture_and_translate(
     result.duration_secs = started_at.elapsed().as_secs_f64();
     result.model = model;
     result.pending = false;
+    result.id = session.trim_start_matches("capture-").to_string();
     update_bubble(app, &result);
     perf_log(
         app,
@@ -1546,16 +1908,32 @@ pub fn run() {
             benchmark_models,
             close_window,
             start_window_drag,
+            fit_bubble_height,
             set_always_on_top,
             begin_capture,
             region_selected,
             load_history,
+            load_favorite_translations,
+            set_translation_favorite,
+            delete_translations,
+            export_data,
+            storage_usage,
+            import_data,
             reopen_bubble,
             get_bubble_data,
             speak_text,
             set_shortcut,
         ])
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
+        .on_window_event(|window, event| {
+            // Balão fechado: nenhuma tradução fica marcada como ativa na lista.
+            if window.label() == "bubble" && matches!(event, tauri::WindowEvent::Destroyed) {
+                let app = window.app_handle();
+                *app.state::<BubbleState>().0.lock().unwrap() = None;
+                let _ = app.emit_to("main", "bubble-changed", ());
+            }
+        })
         .setup(|app| {
             let handle = app.handle().clone();
             if let Ok(settings) = load_settings(handle.clone()) {
@@ -1719,5 +2097,46 @@ mod streaming_tests {
         }
         assert!(timed_translation("openai", "http://localhost", &key, "antigravity/gemini-3-flash").await.is_ok());
         assert!(timed_translation("openai", "http://localhost", &key, "modelo/que-nao-existe").await.is_err());
+    }
+}
+
+#[cfg(test)]
+mod backup_tests {
+    use super::*;
+
+    #[test]
+    fn nome_do_audio_e_estavel_e_ignora_caixa() {
+        // Valores de referência do FNV-1a 64: se mudarem, os .wav já salvos ficariam órfãos.
+        assert_eq!(fnv1a64(""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(fnv1a64("a"), 0xaf63_dc4c_8601_ec8c);
+        assert_eq!(favorite_audio_name("HEAD INSIDE"), favorite_audio_name("head  inside"));
+        let t = TranslationResult {
+            original_text: "Let's head inside now.".into(),
+            breakdown: vec![BreakdownItem { segment: "head inside".into(), ..Default::default() }],
+            ..Default::default()
+        };
+        assert_eq!(speech_texts(&t), ["Let's head inside now.", "head inside"]);
+    }
+
+    #[test]
+    fn detecta_chines_no_meio_da_traducao() {
+        assert!(has_cjk("Ele não caiu sem dar a挣扎."));
+        assert!(!has_cjk("Ele não se rendeu sem lutar — ação, ênfase, à vontade."));
+    }
+
+    #[test]
+    fn data_utc_do_nome_do_arquivo() {
+        assert_eq!(utc_stamp(0), "1970-01-01_00-00");
+        assert_eq!(utc_stamp(1_700_000_000_000), "2023-11-14_22-13");
+        assert_eq!(utc_stamp(951_782_400_000), "2000-02-29_00-00");
+    }
+
+    #[test]
+    fn mescla_sem_repetir_e_mais_recente_primeiro() {
+        let t = |id: &str, txt: &str| TranslationResult { id: id.into(), translation: txt.into(), ..Default::default() };
+        let merged = merge_translations(vec![t("300", "local"), t("100", "local")], vec![t("200", "importada"), t("300", "duplicada")]);
+        let ids: Vec<&str> = merged.iter().map(|x| x.id.as_str()).collect();
+        assert_eq!(ids, ["300", "200", "100"]);
+        assert_eq!(merged[0].translation, "local");
     }
 }

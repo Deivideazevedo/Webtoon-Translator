@@ -65,7 +65,9 @@ h1 { font-size: 16px; margin: 0; }
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
-.tab {
+/* .htab = abas da tela principal (Recentes | Favoritos); classe separada de .tab porque o
+   código das abas de Configurações seleciona todos os .tab. */
+.tab, .htab {
   background: none;
   border: none;
   border-radius: 0;
@@ -74,6 +76,7 @@ h1 { font-size: 16px; margin: 0; }
   font-size: 13px;
   border-bottom: 2px solid transparent;
 }
+.htab.active,
 .tab.active {
   color: var(--accent);
   border-bottom: 2px solid var(--accent);
@@ -165,6 +168,8 @@ button.secondary {
 button:disabled { opacity: .5; cursor: default; }
 .row { display: flex; gap: 10px; }
 .status { font-size: 13px; margin-top: 8px; min-height: 18px; word-break: break-word; overflow-wrap: anywhere; }
+/* Status vazio não reserva espaço (eram as "barrigas" no fim dos cards). */
+.status:empty { min-height: 0; margin-top: 0; }
 .status.ok { color: var(--ok); }
 .status.error { color: var(--danger); }
 .empty { color: var(--muted); text-align: center; padding: 40px 16px; }
@@ -215,8 +220,66 @@ button:disabled { opacity: .5; cursor: default; }
 .combo-list li.selected { color: var(--accent); }
 .combo-list li.empty { color: var(--muted); cursor: default; }
 
+/* Tela principal: lista de traduções */
+#list { margin-top: 14px; }
+.home-tabs { margin: 14px 0 0; align-items: center; }
+.home-tabs .list-usage { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.history-item { display: flex; gap: 10px; align-items: stretch; cursor: pointer; padding: 14px 14px 14px 12px; }
+/* Ativo = tradução aberta no balão (borda + faixa); selecionado pra excluir = fundo levemente azul. */
+.history-item.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.history-item.picked { background: rgba(110, 168, 255, .10); }
+.history-item .pick { display: flex; margin: 2px 0 0; padding: 0; line-height: 0; cursor: pointer; align-self: flex-start; }
+/* Checkbox desenhado aqui: o nativo do WebKitGTK herdava os estilos gerais de input
+   (padding/borda/fundo) e saía cortado quando marcado. */
+.history-item .pick input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid var(--muted);
+  border-radius: 4px;
+  background: transparent;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+.history-item .pick input::before {
+  content: "";
+  width: 8px;
+  height: 4px;
+  border: solid #fff;
+  border-width: 0 0 2px 2px;
+  transform: translateY(-1px) rotate(-45deg);
+  opacity: 0;
+}
+.history-item .pick input:checked { background: var(--accent); border-color: var(--accent); }
+.history-item .pick input:checked::before { opacity: 1; }
+.history-item .hist-body { flex: 1; min-width: 0; }
+.history-item .hist-body .original { margin-bottom: 4px; }
+.history-item .hist-meta { margin-top: 6px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Coluna da direita: ★ no topo e o tempo no fundo (mesma linha do "via modelo"), ambos encostados na borda. */
+.history-item .hist-side { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; flex-shrink: 0; }
+.history-item .hist-time { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.star-btn { background: none; border: none; padding: 0 2px; font-size: 18px; line-height: 1; color: var(--muted); }
+.star-btn.on { color: #f5c542; }
+/* `display: flex` abaixo venceria o atributo hidden; sem isso a barra aparecia com "0 selecionadas". */
+.selection-bar[hidden] { display: none; }
+.selection-bar {
+  display: flex; align-items: center; gap: 8px; margin-top: 12px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+}
+.selection-bar #selection_count { flex: 1; font-size: 13px; color: var(--muted); }
+.selection-bar button { padding: 5px 10px; font-size: 13px; }
+button.danger { background: var(--danger); }
+
+.check-line { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text); }
+.check-line input { width: auto; margin: 0; }
+.warn { color: var(--danger); font-size: 12px; }
+
 .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.4; }
-.bench-results { margin: 8px 0 0; padding-left: 22px; font-size: 13px; max-height: 240px; overflow-y: auto; }
+.bench-results { margin: 8px 0 0; padding-left: 32px; font-size: 13px; max-height: 240px; overflow-y: auto; }
 .bench-results li { margin: 3px 0; overflow-wrap: anywhere; }
 .bench-results .fail, .bench-results .muted { color: var(--muted); }
 

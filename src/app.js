@@ -189,55 +189,170 @@ document.getElementById("quick_model_select").addEventListener("change", async (
   refreshHome();
 });
 
+// --- Tela principal: Recentes | Favoritos ---
+// Recentes guardam tudo (inclusive a mesma frase em modelos diferentes, pra comparar);
+// a ☆ copia a tradução pros Favoritos, que ficam num arquivo à parte e não têm limite.
+const home = { list: "recent", items: [], favoriteIds: new Set(), selected: new Set(), activeId: null };
+const selectionBar = document.getElementById("selection_bar");
+const selectionCount = document.getElementById("selection_count");
+const deleteSelectedBtn = document.getElementById("delete_selected_btn");
+const DELETE_LABEL = "🗑 Excluir";
+let deleteArmed = false;
+
+const listUsage = document.getElementById("list_usage");
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function attr(s) {
+  return esc(s).replace(/"/g, "&quot;");
+}
+
+function renderSelectionBar() {
+  const n = home.selected.size;
+  selectionBar.hidden = n === 0;
+  selectionCount.textContent = `${n} selecionada${n === 1 ? "" : "s"}`;
+  deleteArmed = false;
+  deleteSelectedBtn.textContent = DELETE_LABEL;
+}
+
+function renderHomeList(settings, model) {
+  const items = home.items;
+  if (items.length === 0) {
+    if (home.list === "favorites") {
+      list.innerHTML = `<div class="card empty">Nenhuma tradução favorita ainda.<br>Toque na ☆ de uma tradução em Recentes.</div>`;
+    } else if (!settings || !model) {
+      list.innerHTML = `<div class="card empty">Nenhuma tradução ainda.<br>
+        Abra as Configurações, cole a chave e a URL do seu gateway, teste a conexão e escolha um modelo.</div>`;
+    } else {
+      list.innerHTML = `<div class="card empty">Configurado com <b>${esc(model)}</b>.<br>
+        Capture uma área da tela pra começar a traduzir.</div>`;
+    }
+    return;
+  }
+  list.innerHTML = items
+    .map((item, i) => {
+      const fav = home.favoriteIds.has(item.id);
+      const picked = home.selected.has(item.id);
+      const active = item.id && item.id === home.activeId;
+      return `
+      <div class="card history-item ${picked ? "picked" : ""} ${active ? "active" : ""}" data-index="${i}">
+        <label class="pick" title="Selecionar"><input type="checkbox" data-id="${attr(item.id)}" ${picked ? "checked" : ""}></label>
+        <div class="hist-body">
+          <div class="original">${esc(truncate(item.original_text, 60))}</div>
+          <div>${esc(truncate(item.translation, 80))}</div>
+          ${item.model ? `<div class="hist-meta">via ${esc(item.model)}</div>` : ""}
+        </div>
+        <div class="hist-side">
+          <button class="star-btn ${fav ? "on" : ""}" data-index="${i}" type="button"
+            title="${fav ? "Remover dos favoritos" : "Favoritar tradução"}">${fav ? "★" : "☆"}</button>
+          <span class="hist-time">🕐 ${(item.duration_secs || 0).toFixed(1)}s</span>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
 async function refreshHome() {
   const settings = await invoke("load_settings").catch(() => null);
   const model = activeModel(settings);
   const key = settings
     ? await invoke("get_api_key", { provider: settings.provider || "openai" }).catch(() => null)
     : null;
-
   renderQuickModelSelect(settings, model);
 
-  if (!settings || !model || !key) {
-    list.innerHTML = `
-      <div class="card empty">
-        Nenhuma tradução ainda.<br>
-        Abra as Configurações, cole a chave e a URL do seu gateway, teste a conexão e escolha um modelo.
-      </div>`;
-    return;
-  }
-
-  const history = await invoke("load_history").catch(() => []);
-  if (!history || history.length === 0) {
-    list.innerHTML = `
-      <div class="card empty">
-        Configurado com <b>${esc(model)}</b>.<br>
-        Capture uma área da tela pra começar a traduzir.
-      </div>`;
-    return;
-  }
-
-  list.innerHTML = history
-    .map(
-      (item, i) => `
-      <div class="card history-item" data-index="${i}" style="cursor:pointer; position:relative;">
-        <div class="status" style="position:absolute; top:12px; right:16px; margin:0;">
-          🕐 ${(item.duration_secs || 0).toFixed(1)}s
-        </div>
-        <div class="original" style="margin:0 0 4px; padding-right:60px;">${esc(truncate(item.original_text, 60))}</div>
-        <div style="margin:0;">${esc(truncate(item.translation, 80))}</div>
-        ${item.model ? `<div class="status" style="margin:6px 0 0;">via ${esc(item.model)}</div>` : ""}
-      </div>`
-    )
-    .join("");
-
-  list.querySelectorAll(".history-item").forEach((el) => {
-    el.addEventListener("click", () => {
-      const item = history[Number(el.dataset.index)];
-      invoke("reopen_bubble", { result: item }).catch((e) => setStatus(captureStatus, friendlyError(e), "error"));
-    });
-  });
+  const [history, favorites, usage, bubble] = await Promise.all([
+    invoke("load_history").catch(() => []),
+    invoke("load_favorite_translations").catch(() => []),
+    invoke("storage_usage").catch(() => null),
+    invoke("get_bubble_data").catch(() => null),
+  ]);
+  // Tradução aberta no balão agora (some quando o balão fecha).
+  home.activeId = bubble && !bubble.pending ? bubble.id : null;
+  // Recentes têm limite fixo; favoritos não, então mostra quanto ocupam pra o usuário administrar.
+  const textBytes = usage ? usage.favorites_bytes : 0;
+  const audioBytes = usage ? usage.favorites_audio_bytes : 0;
+  listUsage.textContent =
+    home.list === "favorites"
+      ? `${favorites.length} · ${formatBytes(textBytes + audioBytes)}`
+      : `${history.length}/${usage ? usage.history_max : 20}`;
+  listUsage.title =
+    home.list === "favorites" ? `Texto: ${formatBytes(textBytes)} · Áudio: ${formatBytes(audioBytes)}` : "Traduções recentes / limite";
+  home.favoriteIds = new Set(favorites.map((f) => f.id));
+  home.items = home.list === "favorites" ? favorites : history;
+  // Seleção de itens que não existem mais nesta lista (excluídos, troca de aba) é descartada.
+  const ids = new Set(home.items.map((t) => t.id));
+  home.selected = new Set([...home.selected].filter((id) => ids.has(id)));
+  renderHomeList(settings, key ? model : "");
+  renderSelectionBar();
 }
+
+document.querySelectorAll(".htab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".htab").forEach((t) => t.classList.toggle("active", t === tab));
+    home.list = tab.dataset.list;
+    home.selected.clear();
+    refreshHome();
+  });
+});
+
+list.addEventListener("click", async (e) => {
+  const checkbox = e.target.closest('input[type="checkbox"]');
+  if (checkbox) {
+    if (checkbox.checked) home.selected.add(checkbox.dataset.id);
+    else home.selected.delete(checkbox.dataset.id);
+    checkbox.closest(".history-item").classList.toggle("picked", checkbox.checked);
+    renderSelectionBar();
+    return;
+  }
+  if (e.target.closest(".pick")) return; // clique na margem do checkbox
+  const star = e.target.closest(".star-btn");
+  if (star) {
+    const item = home.items[Number(star.dataset.index)];
+    const favorite = !home.favoriteIds.has(item.id);
+    try {
+      await invoke("set_translation_favorite", { entry: item, favorite });
+    } catch (err) {
+      setStatus(captureStatus, friendlyError(err), "error");
+    }
+    return refreshHome();
+  }
+  const card = e.target.closest(".history-item");
+  if (card) {
+    const item = home.items[Number(card.dataset.index)];
+    invoke("reopen_bubble", { result: item }).catch((err) => setStatus(captureStatus, friendlyError(err), "error"));
+  }
+});
+
+document.getElementById("select_all_btn").addEventListener("click", () => {
+  home.items.forEach((t) => home.selected.add(t.id));
+  refreshHome();
+});
+document.getElementById("clear_selection_btn").addEventListener("click", () => {
+  home.selected.clear();
+  refreshHome();
+});
+// Excluir é permanente: o primeiro clique só arma, o segundo confirma.
+deleteSelectedBtn.addEventListener("click", async () => {
+  if (!deleteArmed) {
+    deleteArmed = true;
+    deleteSelectedBtn.textContent = `Confirmar (${home.selected.size})`;
+    setTimeout(() => {
+      if (deleteArmed) renderSelectionBar();
+    }, 5000);
+    return;
+  }
+  try {
+    await invoke("delete_translations", { list: home.list, ids: [...home.selected] });
+    home.selected.clear();
+  } catch (err) {
+    setStatus(captureStatus, friendlyError(err), "error");
+  }
+  refreshHome();
+});
 
 let currentSettings = null;
 const fetchedModelsByProvider = {};
@@ -403,9 +518,14 @@ favoriteBtn.addEventListener("click", async () => {
   if (cached) fillModelSelect(cached, modelInput.value.trim());
 });
 
+// Favoritos no topo na ordem em que foram salvos (o benchmark grava do mais rápido pro mais lento).
 function sortModelsWithFavoritesFirst(models, provider) {
-  const favs = new Set(favoritesFor(currentSettings, provider));
-  return [...models].sort((a, b) => (favs.has(a.id) ? 0 : 1) - (favs.has(b.id) ? 0 : 1));
+  const favs = favoritesFor(currentSettings, provider);
+  const rank = (id) => {
+    const i = favs.indexOf(id);
+    return i < 0 ? favs.length : i;
+  };
+  return [...models].sort((a, b) => rank(a.id) - rank(b.id));
 }
 
 function fillModelSelect(models, previousSelected) {
@@ -521,6 +641,10 @@ window.__TAURI__.event.listen("capture-error", (event) => {
   setStatus(captureStatus, friendlyError(event.payload), "error");
   refreshHome();
 });
+
+// Os áudios de um favorito são gravados em segundo plano; quando terminam, atualiza o espaço ocupado.
+window.__TAURI__.event.listen("favorites-changed", () => refreshHome());
+window.__TAURI__.event.listen("bubble-changed", () => refreshHome());
 
 window.__TAURI__.event.listen("capture-done", () => {
   refreshHome();
@@ -662,6 +786,44 @@ benchBtn.addEventListener("click", async () => {
     unlisten();
     benchBtn.disabled = false;
     benchBtn.textContent = BENCH_LABEL;
+  }
+});
+
+// --- Backup (Configurações → Geral) ---
+const backupStatus = document.getElementById("backup_status");
+const importFile = document.getElementById("import_file");
+
+document.getElementById("export_btn").addEventListener("click", async () => {
+  setStatus(backupStatus, "Exportando…", "");
+  try {
+    const path = await invoke("export_data", { includeKeys: document.getElementById("export_keys").checked });
+    setStatus(backupStatus, path ? `Backup salvo em ${path}` : "Exportação cancelada.", path ? "ok" : "");
+  } catch (e) {
+    setStatus(backupStatus, friendlyError(e), "error");
+  }
+});
+
+document.getElementById("import_btn").addEventListener("click", () => importFile.click());
+
+importFile.addEventListener("change", async () => {
+  const file = importFile.files && importFile.files[0];
+  importFile.value = ""; // permite importar o mesmo arquivo de novo
+  if (!file) return;
+  setStatus(backupStatus, "Importando…", "");
+  try {
+    const summary = await invoke("import_data", { json: await file.text() });
+    // Reflete na tela o que o backup mudou (sem sair da aba Geral).
+    currentSettings = await invoke("load_settings").catch(() => currentSettings);
+    alwaysOnTopInput.checked = !!(currentSettings && currentSettings.always_on_top);
+    const speed = (currentSettings && currentSettings.speech_speed) || 0.9;
+    speechSpeedInput.value = speed;
+    speechSpeedValue.textContent = `${Number(speed).toFixed(2)}x`;
+    shortcutBtn.textContent = (currentSettings && currentSettings.shortcut) || "CommandOrControl+Shift+T";
+    providerSelect.value = (currentSettings && currentSettings.provider) || "openai";
+    await applyProviderToUI(providerSelect.value);
+    setStatus(backupStatus, summary, "ok");
+  } catch (e) {
+    setStatus(backupStatus, friendlyError(e), "error");
   }
 });
 
