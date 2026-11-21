@@ -345,3 +345,69 @@ mod piper_tests {
         let _ = std::fs::remove_dir_all(&voices);
     }
 }
+
+mod library_tests {
+    use crate::library::*;
+    use crate::translate::TranslationResult;
+
+    fn temp_library(name: &str) -> (Library, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("webtoon-library-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        (Library::new(&dir), dir)
+    }
+
+    fn entry(id: &str) -> TranslationResult {
+        TranslationResult { id: id.into(), original_text: format!("text {id}"), ..Default::default() }
+    }
+
+    #[test]
+    fn recentes_ficam_no_limite_e_o_mais_novo_primeiro() {
+        let (lib, dir) = temp_library("recent");
+        for i in 0..(MAX_RECENT + 3) {
+            lib.add_recent(entry(&i.to_string())).unwrap();
+        }
+        let recent = lib.read(List::Recent).unwrap();
+        assert_eq!(recent.len(), MAX_RECENT);
+        assert_eq!(recent[0].id, (MAX_RECENT + 2).to_string());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn favoritar_desfavoritar_e_excluir() {
+        let (lib, dir) = temp_library("fav");
+        lib.set_favorite(entry("1"), true).unwrap();
+        lib.set_favorite(entry("2"), true).unwrap();
+        lib.set_favorite(entry("1"), true).unwrap(); // não duplica
+        assert_eq!(lib.read(List::Favorites).unwrap().len(), 2);
+        lib.set_favorite(entry("2"), false).unwrap();
+        lib.delete(List::Favorites, &["1".to_string()]).unwrap();
+        assert!(lib.read(List::Favorites).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Exportar de um lado e importar do outro soma as traduções sem repetir e devolve
+    /// configurações e chaves pro app aplicar.
+    #[test]
+    fn backup_ida_e_volta() {
+        let (origem, d1) = temp_library("export");
+        origem.add_recent(entry("10")).unwrap();
+        origem.set_favorite(entry("10"), true).unwrap();
+        let mut keys = serde_json::Map::new();
+        keys.insert("google".into(), serde_json::json!("chave-teste"));
+        let json = origem.export_backup(serde_json::json!({"provider": "google"}), keys).unwrap();
+
+        let (destino, d2) = temp_library("import");
+        destino.add_recent(entry("5")).unwrap();
+        let imported = destino.import_backup(&json).unwrap();
+        assert_eq!((imported.recent, imported.favorites), (1, 1));
+        assert_eq!(imported.api_keys, vec![("google".to_string(), "chave-teste".to_string())]);
+        assert_eq!(imported.settings.unwrap()["provider"], "google");
+        let ids: Vec<_> = destino.read(List::Recent).unwrap().into_iter().map(|t| t.id).collect();
+        assert_eq!(ids, ["10", "5"]);
+        destino.import_backup(&json).unwrap(); // importar de novo não duplica
+        assert_eq!(destino.read(List::Recent).unwrap().len(), 2);
+        assert!(destino.import_backup("{\"format\": \"outro\"}").is_err());
+        let _ = std::fs::remove_dir_all(d1);
+        let _ = std::fs::remove_dir_all(d2);
+    }
+}

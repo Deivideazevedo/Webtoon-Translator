@@ -2,6 +2,7 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use webtoon_core::audio::wav_data_url;
+use webtoon_core::library::{Library, List, MAX_RECENT};
 use webtoon_core::ocr::OcrEngine;
 use webtoon_core::pronunciation;
 use webtoon_core::text::*;
@@ -242,7 +243,11 @@ fn synthesize_speech(app: &tauri::AppHandle, text: &str, session: &str) -> Resul
 // compartilha o arquivo, e ele só é apagado quando nenhum favorito usa mais aquele texto.
 
 fn favorite_audio_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    let dir = data_file(app, "favorite_audio")?;
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Não achei a pasta de configuração: {e}"))?
+        .join("favorite_audio");
     fs::create_dir_all(&dir).map_err(|e| format!("Não consegui criar a pasta de áudios: {e}"))?;
     Ok(dir)
 }
@@ -274,7 +279,8 @@ fn save_favorite_audio(app: &tauri::AppHandle, text: &str, data_url: &str) {
 
 fn is_favorite_text(app: &tauri::AppHandle, text: &str) -> bool {
     let key = normalize_for_speech(text);
-    read_translations(app, FAVORITES_FILE)
+    library(app)
+        .and_then(|lib| lib.read(List::Favorites))
         .unwrap_or_default()
         .iter()
         .flat_map(speech_texts)
@@ -308,7 +314,8 @@ fn ensure_favorite_audio(app: tauri::AppHandle, texts: Vec<String>) {
 /// Apaga os .wav que nenhum favorito usa mais.
 fn gc_favorite_audio(app: &tauri::AppHandle) {
     let Ok(dir) = favorite_audio_dir(app) else { return };
-    let used: std::collections::HashSet<String> = read_translations(app, FAVORITES_FILE)
+    let used: std::collections::HashSet<String> = library(app)
+        .and_then(|lib| lib.read(List::Favorites))
         .unwrap_or_default()
         .iter()
         .flat_map(speech_texts)
@@ -1093,72 +1100,33 @@ async fn benchmark_models(
     Ok(entries)
 }
 
-/// Recentes guardam todas as traduções (inclusive a mesma frase em modelos diferentes, pra
-/// comparar); o usuário limpa pela seleção na tela. Favoritos ficam num arquivo à parte, sem limite.
-const MAX_HISTORY: usize = 20;
-
-fn data_file(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathBuf, String> {
+/// Recentes/favoritos e backup ficam no core (mesmo formato do Android), na pasta de configuração.
+fn library(app: &tauri::AppHandle) -> Result<Library, String> {
     let dir = app
         .path()
         .app_config_dir()
         .map_err(|e| format!("Não achei a pasta de configuração: {e}"))?;
-    fs::create_dir_all(&dir).map_err(|e| format!("Não consegui criar a pasta de configuração: {e}"))?;
-    Ok(dir.join(name))
-}
-
-const HISTORY_FILE: &str = "history.json";
-const FAVORITES_FILE: &str = "favorite_translations.json";
-
-fn read_translations(app: &tauri::AppHandle, file: &str) -> Result<Vec<TranslationResult>, String> {
-    let path = data_file(app, file)?;
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let mut list: Vec<TranslationResult> = serde_json::from_str(&raw).unwrap_or_default();
-    // Traduções de antes de existir `id`: ganham um agora e o arquivo é regravado, pra o id
-    // ficar estável (favoritar/excluir dependem dele).
-    if list.iter().any(|t| t.id.is_empty()) {
-        let base = now_ms();
-        for (i, t) in list.iter_mut().enumerate().filter(|(_, t)| t.id.is_empty()) {
-            t.id = (base - i as u128).to_string();
-        }
-        write_translations(app, file, &list)?;
-    }
-    Ok(list)
-}
-
-fn write_translations(app: &tauri::AppHandle, file: &str, list: &[TranslationResult]) -> Result<(), String> {
-    let raw = serde_json::to_string_pretty(list).map_err(|e| e.to_string())?;
-    fs::write(data_file(app, file)?, raw).map_err(|e| e.to_string())
+    Ok(Library::new(dir))
 }
 
 #[tauri::command]
 fn load_history(app: tauri::AppHandle) -> Result<Vec<TranslationResult>, String> {
-    read_translations(&app, HISTORY_FILE)
+    library(&app)?.read(List::Recent)
 }
 
 #[tauri::command]
 fn load_favorite_translations(app: tauri::AppHandle) -> Result<Vec<TranslationResult>, String> {
-    read_translations(&app, FAVORITES_FILE)
+    library(&app)?.read(List::Favorites)
 }
 
 fn append_history(app: &tauri::AppHandle, entry: TranslationResult) -> Result<(), String> {
-    let mut list = read_translations(app, HISTORY_FILE)?;
-    list.insert(0, entry);
-    list.truncate(MAX_HISTORY);
-    write_translations(app, HISTORY_FILE, &list)
+    library(app)?.add_recent(entry)
 }
 
 #[tauri::command]
 fn set_translation_favorite(app: tauri::AppHandle, entry: TranslationResult, favorite: bool) -> Result<(), String> {
-    let mut list = read_translations(&app, FAVORITES_FILE)?;
-    list.retain(|t| t.id != entry.id);
     let texts = speech_texts(&entry);
-    if favorite {
-        list.insert(0, entry);
-    }
-    write_translations(&app, FAVORITES_FILE, &list)?;
+    library(&app)?.set_favorite(entry, favorite)?;
     if favorite {
         ensure_favorite_audio(app, texts);
     } else {
@@ -1170,11 +1138,9 @@ fn set_translation_favorite(app: tauri::AppHandle, entry: TranslationResult, fav
 /// `list`: "recent" ou "favorites".
 #[tauri::command]
 fn delete_translations(app: tauri::AppHandle, list: String, ids: Vec<String>) -> Result<(), String> {
-    let file = if list == "favorites" { FAVORITES_FILE } else { HISTORY_FILE };
-    let mut items = read_translations(&app, file)?;
-    items.retain(|t| !ids.contains(&t.id));
-    write_translations(&app, file, &items)?;
-    if file == FAVORITES_FILE {
+    let list = List::from_name(&list);
+    library(&app)?.delete(list, &ids)?;
+    if list == List::Favorites {
         gc_favorite_audio(&app);
     }
     Ok(())
@@ -1187,7 +1153,6 @@ async fn list_models(base_url: String, api_key: String, provider: Option<String>
     fetch_models(base_url, api_key, provider).await
 }
 
-const BACKUP_FORMAT: &str = "webtoon-translator-backup";
 const PROVIDERS: [&str; 3] = ["openai", "anthropic", "google"];
 
 /// Abre o "Salvar como" do sistema (começando em Downloads) e grava o backup lá.
@@ -1205,16 +1170,8 @@ async fn export_data(app: tauri::AppHandle, include_keys: bool) -> Result<Option
         }
     }
     let now = now_ms();
-    let backup = serde_json::json!({
-        "format": BACKUP_FORMAT,
-        "version": 1,
-        "exported_at_ms": now,
-        "settings": load_settings(app.clone())?,
-        "api_keys": keys,
-        "history": read_translations(&app, HISTORY_FILE)?,
-        "favorite_translations": read_translations(&app, FAVORITES_FILE)?,
-    });
-    let raw = serde_json::to_string_pretty(&backup).map_err(|e| e.to_string())?;
+    let settings = serde_json::to_value(load_settings(app.clone())?).map_err(|e| e.to_string())?;
+    let raw = library(&app)?.export_backup(settings, keys)?;
 
     let mut dialog = app
         .dialog()
@@ -1240,10 +1197,7 @@ async fn export_data(app: tauri::AppHandle, include_keys: bool) -> Result<Option
 /// Quanto os recentes e favoritos ocupam em disco (bytes), pro usuário administrar o espaço.
 #[tauri::command]
 fn storage_usage(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let size = |file: &str| -> Result<u64, String> {
-        let path = data_file(&app, file)?;
-        Ok(fs::metadata(path).map(|m| m.len()).unwrap_or(0))
-    };
+    let lib = library(&app)?;
     let audio_bytes: u64 = fs::read_dir(favorite_audio_dir(&app)?)
         .into_iter()
         .flatten()
@@ -1252,10 +1206,10 @@ fn storage_usage(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
         .map(|m| m.len())
         .sum();
     Ok(serde_json::json!({
-        "history_bytes": size(HISTORY_FILE)?,
-        "favorites_bytes": size(FAVORITES_FILE)?,
+        "history_bytes": lib.bytes(List::Recent),
+        "favorites_bytes": lib.bytes(List::Favorites),
         "favorites_audio_bytes": audio_bytes,
-        "history_max": MAX_HISTORY,
+        "history_max": MAX_RECENT,
     }))
 }
 
@@ -1263,15 +1217,12 @@ fn storage_usage(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
 /// recentes e favoritas são somados (nada que já existe aqui é apagado).
 #[tauri::command]
 fn import_data(app: tauri::AppHandle, json: String) -> Result<String, String> {
-    let backup: serde_json::Value =
-        serde_json::from_str(&json).map_err(|_| "Esse arquivo não é um JSON válido.".to_string())?;
-    if backup["format"] != BACKUP_FORMAT {
-        return Err("Esse arquivo não é um backup do Webtoon Translator.".to_string());
-    }
+    let lib = library(&app)?;
+    let backup = lib.import_backup(&json)?;
 
     let mut summary = Vec::new();
-    if !backup["settings"].is_null() {
-        let mut imported: Settings = serde_json::from_value(backup["settings"].clone())
+    if let Some(settings) = backup.settings {
+        let mut imported: Settings = serde_json::from_value(settings)
             .map_err(|e| format!("Configurações do backup inválidas: {e}"))?;
         let local = load_settings(app.clone())?;
         for (provider, favs) in local.favorites {
@@ -1302,35 +1253,22 @@ fn import_data(app: tauri::AppHandle, json: String) -> Result<String, String> {
     }
 
     let mut keys = 0;
-    if let Some(map) = backup["api_keys"].as_object() {
-        for (provider, key) in map {
-            if let (true, Some(k)) = (PROVIDERS.contains(&provider.as_str()), key.as_str()) {
-                save_api_key(provider.clone(), k.to_string())?;
-                keys += 1;
-            }
+    for (provider, key) in backup.api_keys {
+        if PROVIDERS.contains(&provider.as_str()) {
+            save_api_key(provider, key)?;
+            keys += 1;
         }
     }
     if keys > 0 {
         summary.push(format!("{keys} chave(s) de API"));
     }
-
-    for (field, file, label) in [
-        ("history", HISTORY_FILE, "recentes"),
-        ("favorite_translations", FAVORITES_FILE, "favoritas"),
-    ] {
-        let imported: Vec<TranslationResult> = serde_json::from_value(backup[field].clone()).unwrap_or_default();
-        if imported.is_empty() {
-            continue;
-        }
-        let n = imported.len();
-        let mut merged = merge_translations(read_translations(&app, file)?, imported);
-        if file == HISTORY_FILE {
-            merged.truncate(MAX_HISTORY);
-        }
-        write_translations(&app, file, &merged)?;
-        summary.push(format!("{n} traduções {label}"));
+    if backup.recent > 0 {
+        summary.push(format!("{} traduções recentes", backup.recent));
     }
-    let favorite_texts: Vec<String> = read_translations(&app, FAVORITES_FILE)?.iter().flat_map(speech_texts).collect();
+    if backup.favorites > 0 {
+        summary.push(format!("{} traduções favoritas", backup.favorites));
+    }
+    let favorite_texts: Vec<String> = lib.read(List::Favorites)?.iter().flat_map(speech_texts).collect();
     if !favorite_texts.is_empty() {
         ensure_favorite_audio(app.clone(), favorite_texts);
         summary.push("áudios dos favoritos sendo gerados em segundo plano".to_string());
