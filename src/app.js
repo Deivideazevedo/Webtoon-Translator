@@ -321,7 +321,7 @@ async function refreshHome() {
   listUsage.textContent =
     home.list === "favorites"
       ? `${favorites.length} · ${formatBytes(textBytes + audioBytes)}`
-      : `${history.length}/${usage ? usage.history_max : 20}`;
+      : `${history.length}/${usage ? usage.history_max : 100}`;
   listUsage.title =
     home.list === "favorites" ? `Texto: ${formatBytes(textBytes)} · Áudio: ${formatBytes(audioBytes)}` : "Traduções recentes / limite";
   home.favoriteIds = new Set(favorites.map((f) => f.id));

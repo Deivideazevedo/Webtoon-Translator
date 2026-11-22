@@ -2,6 +2,7 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use webtoon_core::audio::wav_data_url;
+use webtoon_core::benchmark;
 use webtoon_core::library::{Library, List, MAX_RECENT};
 use webtoon_core::ocr::OcrEngine;
 use webtoon_core::pronunciation;
@@ -955,11 +956,6 @@ fn begin_capture(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-const BENCH_CONCURRENCY: usize = 4;
-const BENCH_FINALISTS: usize = 8;
-const BENCH_EXTRA_RUNS: usize = 2;
-const BENCH_FAVORITES: usize = 5;
-
 #[tauri::command]
 async fn test_model_speed(
     base_url: String,
@@ -973,55 +969,8 @@ async fn test_model_speed(
     timed_translation(&provider, &base_url, &api_key, &model).await
 }
 
-#[derive(Serialize, Clone)]
-struct BenchmarkEntry {
-    model: String,
-    /// Mediana dos tempos (finalistas rodam 1 + BENCH_EXTRA_RUNS vezes).
-    secs: Option<f64>,
-    runs: Vec<f64>,
-    error: Option<String>,
-    favorite: bool,
-}
-
-/// Roda `models` com no máximo BENCH_CONCURRENCY chamadas simultâneas (mais que isso o
-/// gateway começa a devolver 429 e o tempo medido deixa de ser do modelo).
-async fn bench_round(
-    app: &tauri::AppHandle,
-    provider: &str,
-    base_url: &str,
-    api_key: &str,
-    models: Vec<String>,
-    done: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-    total: usize,
-) -> Vec<(String, Result<f64, String>)> {
-    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(BENCH_CONCURRENCY));
-    let mut handles = Vec::new();
-    for model in models {
-        let permit = semaphore.clone().acquire_owned().await.expect("semáforo fechado");
-        let (app, provider, base_url, api_key, done) =
-            (app.clone(), provider.to_string(), base_url.to_string(), api_key.to_string(), done.clone());
-        handles.push(tauri::async_runtime::spawn(async move {
-            let result = timed_translation(&provider, &base_url, &api_key, &model).await;
-            drop(permit);
-            let n = done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
-            let _ = app.emit(
-                "benchmark-progress",
-                serde_json::json!({"done": n, "total": total, "model": model, "ok": result.is_ok()}),
-            );
-            (model, result)
-        }));
-    }
-    let mut out = Vec::new();
-    for h in handles {
-        if let Ok(r) = h.await {
-            out.push(r);
-        }
-    }
-    out
-}
-
-/// Mede todos os modelos do provider com o prompt real e grava os BENCH_FAVORITES mais
-/// rápidos (e que nunca falharam) como favoritos desse provider, substituindo os anteriores.
+/// Mede todos os modelos do provider com o prompt real (core::benchmark) e grava os mais rápidos
+/// (e que nunca falharam) como favoritos desse provider, substituindo os anteriores.
 #[tauri::command]
 async fn benchmark_models(
     app: tauri::AppHandle,
@@ -1029,75 +978,21 @@ async fn benchmark_models(
     api_key: String,
     provider: String,
     models: Vec<String>,
-) -> Result<Vec<BenchmarkEntry>, String> {
-    if models.is_empty() {
-        return Err("Nenhum modelo pra testar. Teste a conexão primeiro.".to_string());
-    }
-    let finalists_n = BENCH_FINALISTS.min(models.len());
-    let total = models.len() + finalists_n * BENCH_EXTRA_RUNS;
-    let done = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let mut runs: std::collections::HashMap<String, Vec<f64>> = std::collections::HashMap::new();
-    let mut errors: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-
-    for (model, result) in bench_round(&app, &provider, &base_url, &api_key, models.clone(), done.clone(), total).await {
-        match result {
-            Ok(secs) => runs.entry(model).or_default().push(secs),
-            Err(e) => {
-                errors.insert(model, e.chars().take(140).collect());
-            }
-        }
-    }
-
-    let mut ranked: Vec<(String, f64)> = runs.iter().map(|(m, r)| (m.clone(), r[0])).collect();
-    ranked.sort_by(|a, b| a.1.total_cmp(&b.1));
-    let finalists: Vec<String> = ranked.iter().take(finalists_n).map(|(m, _)| m.clone()).collect();
-    for _ in 0..BENCH_EXTRA_RUNS {
-        for (model, result) in bench_round(&app, &provider, &base_url, &api_key, finalists.clone(), done.clone(), total).await {
-            match result {
-                Ok(secs) => runs.entry(model).or_default().push(secs),
-                Err(e) => {
-                    errors.entry(model).or_insert_with(|| e.chars().take(140).collect());
-                }
-            }
-        }
-    }
-
-    let median = |r: &[f64]| {
-        let mut v = r.to_vec();
-        v.sort_by(|a, b| a.total_cmp(b));
-        v[v.len() / 2]
-    };
-    // Favorito só se foi finalista e respondeu certo em TODAS as rodadas.
-    let mut reliable: Vec<(String, f64)> = finalists
-        .iter()
-        .filter(|m| !errors.contains_key(*m) && runs.get(*m).map(|r| r.len()) == Some(1 + BENCH_EXTRA_RUNS))
-        .map(|m| (m.clone(), median(&runs[m])))
-        .collect();
-    reliable.sort_by(|a, b| a.1.total_cmp(&b.1));
-    let favorites: Vec<String> = reliable.iter().take(BENCH_FAVORITES).map(|(m, _)| m.clone()).collect();
-
+) -> Result<Vec<benchmark::BenchmarkEntry>, String> {
+    let progress_app = app.clone();
+    let entries = benchmark::run(&provider, &base_url, &api_key, &models, &move |p: benchmark::Progress| {
+        let _ = progress_app.emit(
+            "benchmark-progress",
+            serde_json::json!({"done": p.done, "total": p.total, "model": p.model, "ok": p.ok}),
+        );
+    })
+    .await?;
+    let favorites = benchmark::favorites(&entries);
     if !favorites.is_empty() {
         let mut settings = load_settings(app.clone())?;
-        settings.favorites.insert(provider.clone(), favorites.clone());
+        settings.favorites.insert(provider.clone(), favorites);
         save_settings(app.clone(), settings)?;
     }
-
-    let mut entries: Vec<BenchmarkEntry> = models
-        .iter()
-        .map(|m| BenchmarkEntry {
-            model: m.clone(),
-            secs: runs.get(m).map(|r| median(r)),
-            runs: runs.get(m).cloned().unwrap_or_default(),
-            error: errors.get(m).cloned(),
-            favorite: favorites.contains(m),
-        })
-        .collect();
-    entries.sort_by(|a, b| match (a.secs, b.secs) {
-        (Some(x), Some(y)) => x.total_cmp(&y),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => a.model.cmp(&b.model),
-    });
     Ok(entries)
 }
 
@@ -1480,7 +1375,8 @@ async fn do_capture_and_translate(
 
     let mut result = parse_translation_json(&raw)?;
     fill_pronunciations(&mut result, &lexicon_path());
-    result.duration_secs = started_at.elapsed().as_secs_f64();
+    // O tempo mostrado é só o da IA (igual ao Android e ao benchmark); captura + OCR ficam no perf.log.
+    result.duration_secs = api_started.elapsed().as_secs_f64();
     result.model = model;
     result.pending = false;
     result.id = session.trim_start_matches("capture-").to_string();
@@ -1489,7 +1385,7 @@ async fn do_capture_and_translate(
         app,
         &session,
         "capture_total",
-        serde_json::json!({"duration_ms": result.duration_secs * 1000.0}),
+        serde_json::json!({"duration_ms": elapsed_ms(started_at)}),
     );
 
     append_history(app, result.clone())?;

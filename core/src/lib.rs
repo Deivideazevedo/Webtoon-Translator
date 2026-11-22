@@ -2,6 +2,7 @@
 //! mesmo código pra OCR, tradução com streaming, glosa, pronúncia e voz.
 
 pub mod audio;
+pub mod benchmark;
 pub mod library;
 pub mod ocr;
 pub mod pronunciation;

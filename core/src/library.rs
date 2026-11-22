@@ -9,7 +9,7 @@ use crate::translate::{merge_translations, TranslationResult};
 
 /// Recentes guardam todas as traduções (inclusive a mesma frase em modelos diferentes, pra
 /// comparar); o usuário limpa pela seleção na tela. Favoritos não têm limite.
-pub const MAX_RECENT: usize = 20;
+pub const MAX_RECENT: usize = 100;
 pub const BACKUP_FORMAT: &str = "webtoon-translator-backup";
 const BACKUP_VERSION: u32 = 1;
 

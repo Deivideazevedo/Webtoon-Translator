@@ -23,6 +23,8 @@ sherpa-onnx = { version = "2.0.2", default-features = false, features = ["static
 sha2 = "0.11.1"
 tar = "0.4.46"
 bzip2 = "0.6.1"
+# Benchmark: chamadas em paralelo sem depender do runtime de cada app.
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
