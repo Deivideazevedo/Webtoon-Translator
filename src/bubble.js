@@ -2,8 +2,10 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
 const content = document.getElementById("content");
-const meta = document.getElementById("bubble_meta");
 const copyBtn = document.getElementById("copy_btn");
+const favBtn = document.getElementById("fav_btn");
+const ipaBtn = document.getElementById("ipa_btn");
+const learnBtn = document.getElementById("learn_btn");
 const player = new Audio();
 let speaking = false;
 let current = null;
@@ -23,9 +25,9 @@ function savePrefs() {
   } catch (_) {}
 }
 
-// Lento é absoluto (referência 1.0), não relativo à velocidade configurada: com 0.7
-// configurado, 0.7 × 0.7 dava 0.49 e ficava arrastado.
-const SLOW_RATE = 0.5;
+// Lento é absoluto (referência 1.0), não relativo à velocidade configurada. 0,21 = o 🐢 do
+// Android (0,30x da fala normal, que é 0,7 aqui), bem devagar pra ouvir a pronúncia.
+const SLOW_RATE = 0.21;
 // Base de geração do modo "som mais limpo" (CLEAN_SYNTH_SPEED no lib.rs).
 const CLEAN_SYNTH_SPEED = 0.7;
 const TH_HINT = "th: ponta da língua entre os dentes, soprando o ar — não é f nem t";
@@ -40,11 +42,19 @@ function attr(s) {
 const norm = (s) => (s || "").toLowerCase().replace(/’/g, "'");
 const bare = (s) => norm(s).replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim();
 
-function speakButtons(text) {
+// 🔊/🐢 empilhados: a coluna estreita à esquerda do texto (como no cartão do Android).
+function speakRail(text) {
   return (
-    `<button class="speak" data-text="${attr(text)}" type="button" title="Ouvir">🔊</button>` +
-    `<button class="speak" data-text="${attr(text)}" data-slow="1" type="button" title="Ouvir devagar">🐢</button>`
+    `<div class="rail">` +
+    `<button class="circle speak" data-text="${attr(text)}" type="button" title="Ouvir">🔊</button>` +
+    `<button class="circle speak" data-text="${attr(text)}" data-slow="1" type="button" title="Ouvir devagar">🐢</button>` +
+    `</div>`
   );
+}
+
+// Nota do trecho: "Literal:" e "aqui:" em destaque quando o modelo usa esse formato.
+function noteHtml(note) {
+  return esc(note).replace(/\b(Literal|[Aa]qui):/g, "<b>$1:</b>");
 }
 
 // --- Glosa (tradução literal no hover) ---
@@ -114,81 +124,128 @@ function render(data) {
   const aligned = alignGloss(data.original_text, data.gloss);
   let html = "";
 
-  // Camada 1: tradução
+  // Tradução, original (com hover) e pronúncia, com 🔊/🐢 à esquerda.
+  let main = "";
   if (data.translation) {
-    html += `<div class="translation">${esc(data.translation)}</div>`;
+    main += `<div class="translation">${esc(data.translation)}</div>`;
   } else if (data.pending) {
-    html += `<div class="translation skeleton">⏳ Traduzindo…</div>`;
+    main += `<div class="translation skeleton">⏳ Traduzindo…</div>`;
   } else if (data.grammar_notes) {
-    html += `<div class="error-line">${esc(data.grammar_notes)}</div>`;
+    main += `<div class="error-line">${esc(data.grammar_notes)}</div>`;
   }
-
-  // Camada 2: original (com hover) + áudio + pronúncia
   if (data.original_text) {
-    html += `<div class="original">${withGloss(data.original_text, aligned)} ${speakButtons(data.original_text)}</div>`;
+    main += `<div class="original">${withGloss(data.original_text, aligned)}</div>`;
   }
   if (data.pronunciation_pt) {
-    const toggle = data.pronunciation_ipa
-      ? `<button class="mini" data-action="pron" type="button" title="Alternar PT-BR / IPA">${prefs.pronMode === "ipa" ? "PT" : "IPA"}</button>`
-      : "";
-    html += `<div class="pron-row"><span class="pron-text">🗣 ${pronHtml(data.pronunciation_pt, data.pronunciation_ipa)}</span>${toggle}</div>`;
+    main += `<div class="pron">🗣 ${pronHtml(data.pronunciation_pt, data.pronunciation_ipa)}</div>`;
   }
+  html += data.original_text
+    ? `<div class="block">${speakRail(data.original_text)}<div class="block-text">${main}</div></div>`
+    : main;
 
-  // Camada 3: aprender (trechos + gramática). Trecho igual à frase inteira (ou a um balão
-  // inteiro) só repetiria o que já está em cima, então não aparece.
+  // Aprender (aberto pelo 📖 do cabeçalho): trechos + gramática. Trecho igual à frase inteira
+  // (ou a um balão inteiro) só repetiria o que já está em cima, então não aparece.
   const lines = new Set((data.original_text || "").split("\n").map(bare).concat(bare(data.original_text)));
   const chunks = (data.breakdown || []).filter((c) => c.segment && !lines.has(bare(c.segment)));
   const grammar = data.translation ? data.grammar_notes : "";
-  if (chunks.length || grammar) {
+  const canLearn = !data.pending && (chunks.length > 0 || !!grammar);
+  if (canLearn && prefs.learnOpen) {
     const tab = prefs.learnTab === "grammar" && grammar ? "grammar" : chunks.length ? "chunks" : "grammar";
-    html += `<div class="learn"><button class="learn-toggle" data-action="learn" type="button">📖 Aprender ${prefs.learnOpen ? "▴" : "▾"}</button>`;
-    if (prefs.learnOpen) {
+    html += `<div class="learn">`;
+    if (chunks.length && grammar) {
       html += `<div class="learn-tabs">`;
-      if (chunks.length)
-        html += `<button data-action="tab" data-tab="chunks" class="${tab === "chunks" ? "active" : ""}" type="button">Trechos (${chunks.length})</button>`;
-      if (grammar)
-        html += `<button data-action="tab" data-tab="grammar" class="${tab === "grammar" ? "active" : ""}" type="button">Gramática</button>`;
+      html += `<button data-action="tab" data-tab="chunks" class="${tab === "chunks" ? "active" : ""}" type="button">📖 Trechos</button>`;
+      html += `<button data-action="tab" data-tab="grammar" class="${tab === "grammar" ? "active" : ""}" type="button">Gramática</button>`;
       html += `</div>`;
-      if (tab === "chunks") {
-        for (const c of chunks) {
-          html += `
-            <div class="chunk">
-              <div class="chunk-head">
-                <span class="segment">${withGloss(c.segment, segmentSpans(data.original_text, aligned, c.segment))}</span>
-                ${speakButtons(c.segment)}
-              </div>
-              ${c.pronunciation_pt ? `<div class="pron-row">🗣 ${pronHtml(c.pronunciation_pt, c.pronunciation_ipa)}</div>` : ""}
+    }
+    if (tab === "chunks") {
+      for (const c of chunks) {
+        html += `
+          <div class="chunk block">
+            ${speakRail(c.segment)}
+            <div class="block-text">
+              <div class="segment">${withGloss(c.segment, segmentSpans(data.original_text, aligned, c.segment))}</div>
+              ${c.pronunciation_pt ? `<div class="pron">🗣 ${pronHtml(c.pronunciation_pt, c.pronunciation_ipa)}</div>` : ""}
               <div class="meaning">${esc(c.meaning)}</div>
-              ${c.note ? `<div class="note">${esc(c.note)}</div>` : ""}
-            </div>`;
-        }
-      } else {
-        html += `<div class="note">${esc(grammar)}</div>`;
+              ${c.note ? `<div class="note">${noteHtml(c.note)}</div>` : ""}
+            </div>
+          </div>`;
       }
+    } else {
+      html += `<div class="grammar">${esc(grammar)}</div>`;
     }
     html += `</div>`;
-  } else if (data.pending) {
-    html += `<div class="learn skeleton">⏳ Detalhando…</div>`;
   }
+
+  const model = [data.model, data.pending ? "…" : data.duration_secs ? `${data.duration_secs.toFixed(1)}s` : ""]
+    .filter(Boolean)
+    .join(" · ");
+  if (model) html += `<div class="model-chip">${esc(model)}</div>`;
 
   // O wrapper tem a altura natural do conteúdo; o .bubble-body (flex: 1) sempre ocupa a
   // janela inteira, então medir ele fazia a janela só crescer, nunca encolher.
   content.innerHTML = `<div class="inner">${html}</div>`;
-  meta.textContent = [data.model, data.pending ? "…" : data.duration_secs ? `${data.duration_secs.toFixed(1)}s` : ""]
-    .filter(Boolean)
-    .join(" · ");
-  copyBtn.disabled = !data.translation;
+
+  // Cabeçalho: todos os botões desde o início; os que precisam da tradução pronta ficam apagados.
+  const ready = !data.pending && !!data.translation;
+  copyBtn.disabled = !ready;
+  favBtn.disabled = !ready || !data.id;
+  learnBtn.disabled = !canLearn;
+  learnBtn.classList.toggle("active", prefs.learnOpen && canLearn);
+  ipaBtn.hidden = !data.pronunciation_ipa;
+  ipaBtn.classList.toggle("active", prefs.pronMode === "ipa");
+  renderFavorite();
   fitHeight();
 }
+
+// --- ★ (mesma biblioteca da janela principal e do Android) ---
+let favoriteIds = new Set();
+function renderFavorite() {
+  const on = !!(current && current.id && favoriteIds.has(current.id));
+  favBtn.textContent = on ? "★" : "☆";
+  favBtn.title = on ? "Tirar dos favoritos" : "Favoritar";
+  favBtn.classList.toggle("active", on);
+}
+async function refreshFavorites() {
+  try {
+    const list = await invoke("load_favorite_translations");
+    favoriteIds = new Set((list || []).map((t) => t.id));
+  } catch (_) {}
+  renderFavorite();
+}
+favBtn.addEventListener("click", async () => {
+  if (!current || !current.id) return;
+  const favorite = !favoriteIds.has(current.id);
+  try {
+    await invoke("set_translation_favorite", { entry: current, favorite });
+    if (favorite) favoriteIds.add(current.id);
+    else favoriteIds.delete(current.id);
+    renderFavorite();
+  } catch (err) {
+    console.error("Falha ao favoritar:", err);
+  }
+});
+listen("favorites-changed", refreshFavorites);
+refreshFavorites();
+
+ipaBtn.addEventListener("click", () => {
+  prefs.pronMode = prefs.pronMode === "ipa" ? "pt" : "ipa";
+  savePrefs();
+  if (current) render(current);
+});
+learnBtn.addEventListener("click", () => {
+  prefs.learnOpen = !prefs.learnOpen;
+  savePrefs();
+  if (current) render(current);
+});
 
 // A janela acompanha a altura do conteúdo (modo compacto fica pequeno, "Aprender" cresce).
 function fitHeight() {
   requestAnimationFrame(() => {
     const head = document.querySelector(".bubble-head").offsetHeight;
-    const foot = document.querySelector(".bubble-foot").offsetHeight;
     const inner = content.firstElementChild;
     const body = inner ? inner.offsetHeight + 24 : content.scrollHeight; // 24 = padding do .bubble-body
-    invoke("fit_bubble_height", { height: head + body + foot + 2 }).catch(() => {});
+    invoke("fit_bubble_height", { height: head + body + 2 }).catch(() => {});
   });
 }
 
@@ -197,11 +254,7 @@ content.addEventListener("click", async (e) => {
   const btn = e.target.closest("button");
   if (!btn || !current) return;
   const action = btn.dataset.action;
-  if (action === "pron") {
-    prefs.pronMode = prefs.pronMode === "ipa" ? "pt" : "ipa";
-  } else if (action === "learn") {
-    prefs.learnOpen = !prefs.learnOpen;
-  } else if (action === "tab") {
+  if (action === "tab") {
     prefs.learnTab = btn.dataset.tab;
   } else if (btn.classList.contains("speak")) {
     return speak(btn);
@@ -244,10 +297,13 @@ async function speak(btn) {
     });
   } catch (err) {
     if (String(err).includes("VOZ_NAO_INSTALADA")) {
-      // Voz é opcional: em vez de erro, diz onde baixar (no rodapé, por alguns segundos).
-      const before = meta.textContent;
-      meta.textContent = "🔇 Voz não instalada — baixe em Configurações → Voz";
-      setTimeout(() => (meta.textContent = before), 5000);
+      // Voz é opcional: em vez de erro, diz onde baixar (no rodapé do modelo, por alguns segundos).
+      const chip = content.querySelector(".model-chip");
+      if (chip) {
+        const before = chip.textContent;
+        chip.textContent = "🔇 Voz não instalada — baixe em Configurações → Voz";
+        setTimeout(() => (chip.textContent = before), 5000);
+      }
       return;
     }
     console.error("Falha ao gerar fala:", err);
@@ -274,8 +330,8 @@ copyBtn.addEventListener("click", async () => {
     document.execCommand("copy");
     ta.remove();
   }
-  copyBtn.textContent = "✓ Copiado";
-  setTimeout(() => (copyBtn.textContent = "📋 Copiar"), 1500);
+  copyBtn.textContent = "✓";
+  setTimeout(() => (copyBtn.textContent = "📋"), 1500);
 });
 
 // --- Opacidade do fundo (Configurações → Geral). Muda ao vivo enquanto o slider é arrastado. ---
@@ -314,6 +370,6 @@ document.addEventListener("keydown", (e) => {
 
 const head = document.querySelector(".bubble-head");
 head.addEventListener("mousedown", (e) => {
-  if (e.target.closest("#close_btn")) return;
+  if (e.target.closest("button")) return;
   invoke("start_window_drag").catch((err) => console.error("Falha ao arrastar:", err));
 });

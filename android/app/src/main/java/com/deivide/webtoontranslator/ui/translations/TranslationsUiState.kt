@@ -15,6 +15,8 @@ data class TranslationsUiState(
     val confirmingDelete: Boolean = false,
     /** Tradução aberta no painel de baixo (o cartão dela fica destacado na lista). */
     val opened: Translation? = null,
+    /** Frase digitada/colada sendo traduzida agora (no mesmo painel de baixo). */
+    val typed: String? = null,
     val options: ReadingOptions = ReadingOptions(),
     val notice: UiText? = null,
 ) {

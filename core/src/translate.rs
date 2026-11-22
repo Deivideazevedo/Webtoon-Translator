@@ -40,11 +40,32 @@ sentido que ela tem nesta frase. Contrações viram 1 item (\"let's\" = \"vamos\
 /// então isso nunca corta uma resposta normal (cortar no meio quebraria o JSON).
 pub const MAX_OUTPUT_TOKENS: u32 = 4096;
 
-/// Um client só pro app inteiro: reaproveita conexões (keep-alive/TLS) entre chamadas.
+/// Um client só pro app inteiro: reaproveita conexões (keep-alive/TLS) entre chamadas. Os
+/// limites de tempo evitam a tradução "carregando pra sempre" quando a rede cai no meio (celular
+/// trocando de Wi-Fi pra 4G, túnel do Tailscale caindo): sem eles a requisição nunca termina.
 pub fn http() -> &'static reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
-    CLIENT.get_or_init(reqwest::Client::new)
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(CONNECT_TIMEOUT_SECS))
+            // Nenhum dado por esse tempo (inclusive no meio do streaming) = conexão morta.
+            .read_timeout(std::time::Duration::from_secs(READ_IDLE_TIMEOUT_SECS))
+            // Reaproveita a conexão entre traduções (o leitor para pra ouvir o áudio, ler…), mas não
+            // uma parada há muito tempo: no celular ela costuma morrer em silêncio (tela apagada,
+            // troca de rede) e reaproveitar uma morta trava a tradução até o limite de leitura.
+            // O keepalive mantém a viva e percebe a morta nesse meio-tempo.
+            .pool_idle_timeout(std::time::Duration::from_secs(POOL_IDLE_SECS))
+            .tcp_keepalive(std::time::Duration::from_secs(TCP_KEEPALIVE_SECS))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
 }
+
+const CONNECT_TIMEOUT_SECS: u64 = 8;
+/// Folgado pra modelos que "pensam" antes de mandar o primeiro token.
+const READ_IDLE_TIMEOUT_SECS: u64 = 45;
+const POOL_IDLE_SECS: u64 = 120;
+const TCP_KEEPALIVE_SECS: u64 = 15;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelEntry {

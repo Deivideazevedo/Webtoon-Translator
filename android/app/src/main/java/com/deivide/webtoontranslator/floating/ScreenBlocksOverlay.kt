@@ -1,6 +1,7 @@
 package com.deivide.webtoontranslator.floating
 
 import android.content.Context
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -13,11 +14,11 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
@@ -43,6 +44,9 @@ class ScreenBlocksOverlay(
     private val minWidth = (MIN_WIDTH_DP * context.resources.displayMetrics.density).toInt()
 
     val isShown get() = overlays.isNotEmpty()
+
+    /** Onde cada tradução está na tela agora. */
+    fun rects(): List<Rect> = overlays.mapNotNull { it.screenRect() }
 
     /** [topLimit]: a caixinha não sobe pra cima disso (barra de status). */
     fun show(blocks: List<ScreenBlock>, topLimit: Int) {
@@ -122,14 +126,14 @@ private fun BlockLabel(
 ) {
     Text(
         text,
-        color = Color(0xFFF2F2F2),
+        color = MaterialTheme.colorScheme.onSurface,
         fontSize = 14.sp,
         lineHeight = 17.sp,
         modifier = Modifier
             .fillMaxWidth()
             .onSizeChanged { onMeasured(it.height) }
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF1E1E1E).copy(alpha = 0.9f))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
             .pointerInput(Unit) {
                 detectDragGestures { change, amount ->
                     change.consume()

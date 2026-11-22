@@ -15,7 +15,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,16 +34,14 @@ import com.deivide.webtoontranslator.domain.model.Translation
 import com.deivide.webtoontranslator.ui.translation.TranslationCardActions
 
 /**
- * "📖 Aprender ▾": recolhível, com abas Trechos / Gramática. Aberto/fechado e a aba ficam salvos,
- * como no balão do desktop. Some se a tradução não tiver nada pra ensinar.
+ * "Aprender" (aberto pelo 📖 do cabeçalho do cartão): abas Trechos / Gramática. Aberto/fechado e
+ * a aba ficam salvos, como no balão do desktop. Some se a tradução não tiver nada pra ensinar.
  */
 @Composable
 internal fun LearnSection(
     translation: Translation,
     options: ReadingOptions,
     actions: TranslationCardActions,
-    /** false quando quem abre/fecha é outro botão (o 📖 do cartão flutuante). */
-    showToggle: Boolean = true,
 ) {
     // Trecho igual à frase inteira não ensina nada a mais (o desktop também esconde).
     val segments = translation.segments.filter { !it.text.equals(translation.originalText, ignoreCase = true) }
@@ -52,11 +49,6 @@ internal fun LearnSection(
     if (segments.isEmpty() && !hasGrammar) return
 
     HorizontalDivider(Modifier.padding(vertical = 8.dp))
-    if (showToggle) {
-        TextButton(onClick = { actions.onOptionsChange { it.copy(learnOpen = !it.learnOpen) } }) {
-            Text(stringResource(if (options.learnOpen) R.string.learn_hide else R.string.learn_show))
-        }
-    }
     if (!options.learnOpen) return
 
     // Sem trechos, a aba de gramática é a única que faz sentido (e vice-versa).
@@ -105,10 +97,10 @@ private fun SegmentItem(
     actions: TranslationCardActions,
 ) {
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        SpeakButtons(segment.text, actions.onSpeak, stacked = true)
+        SpeakButtons(segment.text, actions.onSpeak)
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
             GlossText(segment.text, gloss, fontSize = 15.sp, onSpeakWord = { actions.onSpeak(it, false) })
-            Pronunciation(segment.pronunciationPt, segment.pronunciationIpa, options, actions)
+            Pronunciation(segment.pronunciationPt, segment.pronunciationIpa, options)
             Text(
                 segment.meaning,
                 fontSize = 15.sp,

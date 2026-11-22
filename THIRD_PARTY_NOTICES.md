@@ -69,6 +69,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 - Licença: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0) —
   https://creativecommons.org/licenses/by-sa/4.0/
 
+## OCR no Android: Google ML Kit Text Recognition
+
+- Biblioteca do Google (`com.google.mlkit:text-recognition`), com o modelo embutido no app; lê o texto da
+  tela no próprio aparelho, sem enviar imagens pra fora.
+- Licença: não é software livre; uso sob os termos do Google (ML Kit Terms of Service:
+  https://developers.google.com/ml-kit/terms). A distribuição junto com o app é autorizada pela permissão
+  adicional no fim do [LICENSE](LICENSE).
+- O ocrs (acima) continua no app Android como reserva, caso o ML Kit falhe.
+
 ## Bibliotecas
 
 O app também usa bibliotecas Rust de código aberto (Tauri, ocrs, rten, reqwest, entre outras), sob licenças

@@ -22,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -58,9 +57,8 @@ import com.deivide.webtoontranslator.ui.home.components.PowerButton
 import com.deivide.webtoontranslator.ui.home.components.modeIcon
 import com.deivide.webtoontranslator.ui.home.components.modeLabel
 import com.deivide.webtoontranslator.ui.theme.AppTheme
-import com.deivide.webtoontranslator.ui.translation.TranslationCard
-import com.deivide.webtoontranslator.ui.translation.TranslationCardActions
-import com.deivide.webtoontranslator.ui.translation.TranslationCardState
+import com.deivide.webtoontranslator.ui.translation.TranslationRequest
+import com.deivide.webtoontranslator.ui.translation.TranslationSheet
 
 private enum class Sheet { NONE, MODEL, MODE, LAST }
 
@@ -196,22 +194,7 @@ fun HomeScreen(
             onDismiss = { sheet = Sheet.NONE },
         )
         Sheet.LAST -> state.last?.let { last ->
-            val actions = remember(viewModel) {
-                TranslationCardActions(
-                    onSpeak = viewModel::speak,
-                    onToggleFavorite = viewModel::toggleFavorite,
-                    onOptionsChange = viewModel::updateOptions,
-                )
-            }
-            ModalBottomSheet(onDismissRequest = { sheet = Sheet.NONE }, containerColor = MaterialTheme.colorScheme.surface) {
-                TranslationCard(
-                    state = TranslationCardState.Done(last),
-                    isFavorite = state.lastIsFavorite,
-                    options = state.options,
-                    actions = actions,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).padding(bottom = 24.dp),
-                )
-            }
+            TranslationSheet(TranslationRequest.Saved(last), onDismiss = { sheet = Sheet.NONE })
         }
         Sheet.NONE -> Unit
     }

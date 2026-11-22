@@ -106,9 +106,13 @@ na pasta de configuração.
 O Webtoon Translator é software livre, sob a [GNU GPL v3 ou posterior](LICENSE): você pode usar, estudar,
 modificar e redistribuir, desde que versões modificadas também sejam distribuídas com o código-fonte sob a GPL.
 
+A licença tem uma permissão adicional (seção 7 da GPL, no fim do [LICENSE](LICENSE)) que autoriza distribuir o
+app junto com o Google ML Kit, usado no Android pra ler o texto da tela. O ML Kit é do Google e tem licença
+própria; todo o resto continua sob a GPL.
+
 ## Créditos
 
 Voz [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx),
-OCR [ocrs](https://github.com/robertknight/ocrs), pronúncia baseada no
+OCR [ocrs](https://github.com/robertknight/ocrs) (desktop) e [Google ML Kit](https://developers.google.com/ml-kit/vision/text-recognition/v2/android) (Android), pronúncia baseada no
 [CMU Pronouncing Dictionary](https://github.com/cmusphinx/cmudict). Licenças em
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

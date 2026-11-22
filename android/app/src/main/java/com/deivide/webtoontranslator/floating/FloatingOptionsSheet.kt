@@ -20,9 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.CropFree
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +44,8 @@ import com.deivide.webtoontranslator.data.settings.AppSettings
 import com.deivide.webtoontranslator.data.settings.TranslationMode
 import com.deivide.webtoontranslator.ui.components.OptionGroupLabel
 import com.deivide.webtoontranslator.ui.components.OptionItem
+import com.deivide.webtoontranslator.ui.home.components.modeIcon
+import com.deivide.webtoontranslator.ui.home.components.modeLabel
 import com.deivide.webtoontranslator.ui.theme.AppTheme
 import kotlinx.coroutines.flow.StateFlow
 
@@ -134,26 +133,12 @@ internal fun FloatingOptionsSheet(
 @Composable
 internal fun ModeRows(current: TranslationMode, onSelect: (TranslationMode) -> Unit) {
     TranslationMode.entries.forEach { option ->
-        val (icon, color) = option.icon()
+        val (icon, color) = modeIcon(option)
         OptionItem(
-            stringResource(option.label()), selected = option == current, onClick = { onSelect(option) },
+            stringResource(modeLabel(option)), selected = option == current, onClick = { onSelect(option) },
             icon = icon, iconColor = color, compact = true,
         )
     }
-}
-
-/** Mesmos ícones e cores do seletor de modo da tela Inicial. */
-@Composable
-private fun TranslationMode.icon() = when (this) {
-    TranslationMode.REGION -> Icons.Filled.CropFree to AppTheme.colors.icons.purple
-    TranslationMode.FIXED_REGION -> Icons.Filled.PushPin to AppTheme.colors.icons.green
-    TranslationMode.FULL_SCREEN -> Icons.Filled.Fullscreen to AppTheme.colors.icons.blue
-}
-
-private fun TranslationMode.label() = when (this) {
-    TranslationMode.REGION -> R.string.mode_region
-    TranslationMode.FIXED_REGION -> R.string.mode_fixed_region
-    TranslationMode.FULL_SCREEN -> R.string.mode_full_screen
 }
 
 /**

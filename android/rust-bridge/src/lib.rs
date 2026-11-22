@@ -213,6 +213,19 @@ impl Engine {
             .collect())
     }
 
+    /// Junta em balões linhas lidas por outro OCR (o do Google, no Android), com a mesma regra
+    /// usada nas linhas do ocrs ([ocr::group_blocks]).
+    pub fn group_lines(&self, lines: Vec<TextBlock>) -> Vec<TextBlock> {
+        let lines: Vec<ocr::OcrLine> = lines
+            .into_iter()
+            .map(|l| ocr::OcrLine { text: l.text, left: l.left, top: l.top, right: l.right, bottom: l.bottom })
+            .collect();
+        ocr::group_blocks(&lines)
+            .into_iter()
+            .map(|b| TextBlock { text: b.text, left: b.left, top: b.top, right: b.right, bottom: b.bottom })
+            .collect()
+    }
+
     /// Tradução curta de vários balões numa chamada só; uma por texto, na mesma ordem.
     pub async fn translate_blocks(
         &self,

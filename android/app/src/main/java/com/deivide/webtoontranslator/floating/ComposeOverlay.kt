@@ -1,6 +1,7 @@
 package com.deivide.webtoontranslator.floating
 
 import android.content.Context
+import android.graphics.Rect
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -93,6 +94,13 @@ class ComposeOverlay(
         onBack = handler
         view.isFocusableInTouchMode = handler != null
         params?.let { if (shown) show(it) }
+    }
+
+    /** Onde a janela está na tela (null se não está aberta). */
+    fun screenRect(): Rect? {
+        if (!shown || !view.isAttachedToWindow) return null
+        val at = IntArray(2).also(view::getLocationOnScreen)
+        return Rect(at[0], at[1], at[0] + view.width, at[1] + view.height)
     }
 
     /** Some sem destruir (pra captura), mantendo o estado. */

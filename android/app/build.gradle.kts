@@ -92,4 +92,5 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation("${libs.jna.get()}@aar")
+    implementation(libs.mlkit.text.recognition)
 }

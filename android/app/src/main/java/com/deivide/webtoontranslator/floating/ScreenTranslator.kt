@@ -25,7 +25,16 @@ class ScreenTranslator(
      * relógio e a URL do navegador viram "balões". A chamada à IA é tentada de novo uma vez sem
      * avisar; se falhar de novo, só uma mensagem curta (detalhes no [ErrorLog]).
      */
-    suspend fun translate(screen: Bitmap, skipTop: Int, skipBottom: Int): Result {
+    suspend fun translate(
+        screen: Bitmap,
+        skipTop: Int,
+        skipBottom: Int,
+        /**
+         * Traduções já feitas (texto do OCR normalizado → tradução): só os balões novos vão pra IA;
+         * o mesmo balão lido com uma letra diferente reaproveita a tradução ([AutoText.same]).
+         */
+        cache: MutableMap<String, String>? = null,
+    ): Result {
         val current = settings.load()
         if (!current.isConfigured) return Result.Failed(UiText.Resource(R.string.error_not_configured))
         val blocks = try {
@@ -38,11 +47,15 @@ class ScreenTranslator(
         }.filter { it.top >= skipTop && it.bottom <= screen.height - skipBottom }
         if (blocks.isEmpty()) return Result.Failed(UiText.Resource(R.string.error_no_text_screen))
 
+        val cached = blocks.associate { it.text to cache?.let { c -> AutoText.find(c, AutoText.normalize(it.text)) } }
+        val missing = blocks.map { it.text }.distinct().filter { cached[it] == null }
         repeat(ATTEMPTS) { attempt ->
             try {
-                val translated = translations.translateBlocks(blocks.map { it.text }, current)
+                val fresh = if (missing.isEmpty()) emptyMap()
+                else missing.zip(translations.translateBlocks(missing, current)).toMap()
+                fresh.forEach { (text, translation) -> cache?.put(AutoText.normalize(text), translation) }
                 return Result.Blocks(
-                    blocks.zip(translated) { block, text -> block.copy(translation = text) }
+                    blocks.map { block -> block.copy(translation = fresh[block.text] ?: cached[block.text].orEmpty()) }
                         // Itens que o modelo achou que não são inglês (ruído, nome de site) voltam vazios.
                         .filter { it.translation.isNotBlank() }
                 )

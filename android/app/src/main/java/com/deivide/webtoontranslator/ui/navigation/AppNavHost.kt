@@ -2,11 +2,11 @@ package com.deivide.webtoontranslator.ui.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -24,10 +24,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
@@ -38,6 +40,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.deivide.webtoontranslator.R
+import com.deivide.webtoontranslator.WebtoonApp
+import com.deivide.webtoontranslator.ui.connection.ConnectionScreen
 import com.deivide.webtoontranslator.ui.home.HomeScreen
 import com.deivide.webtoontranslator.ui.more.AboutScreen
 import com.deivide.webtoontranslator.ui.more.AppearanceScreen
@@ -46,10 +50,10 @@ import com.deivide.webtoontranslator.ui.more.BatteryScreen
 import com.deivide.webtoontranslator.ui.more.ErrorsScreen
 import com.deivide.webtoontranslator.ui.more.MoreScreen
 import com.deivide.webtoontranslator.ui.more.StorageScreen
-import com.deivide.webtoontranslator.ui.connection.ConnectionScreen
-import com.deivide.webtoontranslator.ui.voice.VoiceScreen
+import com.deivide.webtoontranslator.ui.more.TutorialScreen
 import com.deivide.webtoontranslator.ui.theme.AppTheme
 import com.deivide.webtoontranslator.ui.translations.TranslationsScreen
+import com.deivide.webtoontranslator.ui.voice.VoiceScreen
 
 /** Telas do app. As 3 abas ficam na navegação de baixo; as de detalhe empilham por cima. */
 object Routes {
@@ -64,6 +68,7 @@ object Routes {
     const val ERRORS = "errors"
     const val BATTERY = "battery"
     const val ABOUT = "about"
+    const val TUTORIAL = "tutorial"
 }
 
 private enum class Tab(val route: String, val icon: ImageVector, val label: Int) {
@@ -79,6 +84,14 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
     val openConnection = { navController.navigate(Routes.CONNECTION) }
     val back: () -> Unit = { navController.popBackStack() }
     val tabs = Tab.entries.map { it.route }
+    // Primeira abertura: o tutorial abre por cima da Inicial (fechar volta pra ela).
+    val settings = (LocalContext.current.applicationContext as WebtoonApp).container.settingsRepository
+    LaunchedEffect(Unit) {
+        if (!settings.tutorialSeen) {
+            settings.tutorialSeen = true
+            navController.navigate(Routes.TUTORIAL)
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
@@ -123,6 +136,7 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
                 composable(Routes.ERRORS) { ErrorsScreen(onBack = back) }
                 composable(Routes.BATTERY) { BatteryScreen(onBack = back) }
                 composable(Routes.ABOUT) { AboutScreen(onBack = back) }
+                composable(Routes.TUTORIAL) { TutorialScreen(onDone = back) }
             }
         }
         // A barra de baixo só aparece nas 3 abas; telas de detalhe ocupam a tela toda. Entra e sai

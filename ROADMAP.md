@@ -9,7 +9,7 @@ Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito · ➖ descartado ou abso
 
 ## Android
 
-### Modos de tradução e cartão novo (ver [`android/LAYOUT.md`](android/LAYOUT.md) §5.6–5.7) — em andamento (M1–M5 feitos)
+### Modos de tradução e cartão novo (ver [`android/LAYOUT.md`](android/LAYOUT.md) §5.6–5.7) — ✅
 
 | # | Item | Status |
 |---|---|---|
@@ -18,8 +18,10 @@ Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito · ➖ descartado ou abso
 | M3 | **Região** no cartão novo | ✅ |
 | M4 | **Região fixa**: área com alças nos cantos e ✓/✗; toque no ícone traduz de novo; ⌗ redefine (absorve o item 31) | ✅ |
 | M5 | **Tela cheia**: OCR com posição de cada bloco + agrupamento em balões; uma chamada à IA pra todos; tradução em cima de cada balão; toque abre o cartão completo | ✅ (traduções acima de cada balão, arrastáveis) |
-| M6 | **Região automática**: traduz sozinho quando a área muda (cartão fora da área) | ⬜ |
-| M7 | **Tela cheia automática**: traduz de novo quando a rolagem para | ⬜ |
+| M6 | **Região automática**: traduz sozinho quando a área muda (cartão fora da área) | ✅ |
+| M7 | **Tela cheia automática**: traduz de novo quando a rolagem para | ✅ |
+| M8 | **OCR do Google (ML Kit)** no Android: ~4× mais rápido que o ocrs e sem o ruído das bordas de balão/efeitos sonoros; descarta linhas de confiança baixa, minúsculas ou com endereço de site; ocrs fica de reserva (licença: exceção da GPL no fim do `LICENSE`) | ✅ |
+| M9 | **Desempenho dos automáticos**: tela "parada" em 0,5 s, tradução logo após a 1ª leitura (conferência em paralelo), ícone apagado da imagem em vez de escondido; timeouts de rede (núcleo) | ✅ (região: ~4 s → ~1,8 s até a tradução; tela cheia: ~3,5 s → ~1,8 s) |
 
 ### Layout novo (ver [`android/LAYOUT.md`](android/LAYOUT.md))
 
@@ -32,10 +34,10 @@ resto: as próximas telas já nascem no padrão novo.
 | L2 | **Componentes padrão**: barra do topo fixa, navegação inferior, cartão de seção, título de seção, `IconTile` (quadrado/redondo, cor em transparência + ícone sólido), linha de configuração, seletor ▾, bottom sheet de opções, abas em pílula | ✅ |
 | L3 | **Navegação inferior: Inicial \| Traduções \| Mais** | ✅ |
 | L4 | **Inicial**: cartão com botão grande + pílula de status + seletores **Modelo de IA** e **Modo de tradução** (bottom sheets); última tradução; personalizar ícone | 🟨 (cartão de controle, seletores de modelo ★ e de modo, última tradução; falta "personalizar ícone") |
-| L5 | **Traduções**: traduzir texto digitado/colado (absorve o item 37) + Recentes/Favoritos | 🟨 (Recentes/Favoritos em pílula; falta digitar/colar frase) |
+| L5 | **Traduções**: traduzir texto digitado/colado (absorve o item 37) + Recentes/Favoritos | ✅ |
 | L6 | **Mais**: Conexão, Voz, Aparência, Acesso rápido · Dados (Backup, Armazenamento) · Suporte (Tutorial, App fechando sozinho, Sobre e licenças) | ✅ |
 | L7 | **Voz**: voz do Android (escolher entre as instaladas), **tom** e velocidade, ouvir exemplo — tudo nativo, sem gerar áudio | ✅ (voz instalada, tom, velocidade, ouvir exemplo) |
-| L8 | Cartão de tradução e ícone flutuante seguindo o tema e o padrão de botões redondos | ⬜ |
+| L8 | Cartão de tradução e ícone flutuante seguindo o tema e o padrão de botões redondos | ✅ |
 | L9 | **Opção "Pronúncia em IPA"** (em Mais → Aparência ou Voz): desligada por padrão; ligada, mostra o botão IPA no cartão pra alternar PT-BR ⇄ IPA | ✅ (Mais → Aparência) |
 | L10 | **Erros recentes** (em Mais → Suporte): lista das últimas falhas (API, OCR) com data e detalhe técnico, pra investigar quando uma tradução falha. O registro já é gravado (`ErrorLog`); falta a tela | ✅ (Mais → Erros recentes; tocar copia o detalhe) |
 
@@ -103,7 +105,7 @@ resto: as próximas telas já nascem no padrão novo.
 | 26 | **Toque longo** (ou tocar de novo sem arrastar) abre o menu de baixo: modo, modelo, abrir o app, parar 💡 | 🟨 (modo, abrir o app e parar; falta escolher o modelo) |
 | 27 | **Cartão de tradução perto da área selecionada**, com o conteúdo do balão do desktop (PT/IPA, 🔊, 🐢, Aprender, Copiar, ★) | ✅ |
 | 28 | **Tocar numa palavra** mostra o significado (a glosa; no celular não existe hover) 💡 | ✅ (pontilhado nas palavras do original e dos trechos; tocar mostra a tradução) |
-| 29 | Desligar pelo **"Parar" na notificação** e arrastando o ícone até um ✕ embaixo da tela | 🟨 ("Parar" na notificação e no menu; falta arrastar até o ✕) |
+| 29 | Desligar pelo **"Parar" na notificação** e arrastando o ícone até um ✕ embaixo da tela | ➖ ("Parar" na notificação e no menu do ícone bastam; arrastar até o ✕ descartado) |
 | 30 | Tela de ajuda pro **"app fechando sozinho"** (otimização de bateria da Samsung/Xiaomi) 💡 | ✅ (Mais → App fechando sozinho) |
 
 Regra de captura: **esconder tudo que é nosso** (ícone, cartão, retângulo) antes de capturar a tela e
@@ -117,7 +119,7 @@ cortar a barra de status. O Translate On Screen não faz isso e traduz o própri
 | 32 | **Editar o texto do OCR** e traduzir de novo (quando o OCR erra uma letra) 💡 | ⬜ |
 | 33 | Personalizar o ícone flutuante: tamanho, transparência, cor 💡 | ⬜ |
 | 34 | Ações configuráveis no toque duplo e no toque longo do ícone 💡 | ⬜ |
-| 35 | Tutorial curto na primeira abertura (e no menu "?") 💡 | ⬜ |
+| 35 | Tutorial curto na primeira abertura (e no menu "?") 💡 | ✅ (Android: abre na primeira vez e em Mais → Tutorial) |
 | 36 | Atalho no painel rápido do Android (Quick Settings tile) pra ligar/desligar 💡 | ⬜ |
 
 ### Prioridade 4 — extras
@@ -137,15 +139,22 @@ cortar a barra de status. O Translate On Screen não faz isso e traduz o própri
 
 ## Desktop
 
-> Plano (21/11/2026): depois que o Android estiver completo, replicar no desktop o mesmo layout,
-> funcionalidades e regras do Android (abas, cartões, seletores, modos, backup etc.).
+> Plano (21/11/2026, reforçado em 22/11): **migrar tudo do Android pro desktop exatamente como está**
+> (abas, cartões, seletores, modos inclusive os automáticos, digitar frase, tutorial, backup etc.). A única
+> diferença é o que é próprio do computador: atalhos de teclado, botões, janelas. O balão do desktop já tem
+> o layout do cartão do Android (botões redondos, 🔊/🐢 à esquerda, trechos com nota) e o 🐢 em 0,30x.
+> OCR: o ML Kit só existe pra celular; no desktop, avaliar o OCR do Windows (Windows.Media.Ocr) e, no
+> Linux, PaddleOCR/RapidOCR, medindo contra o ocrs como foi feito no Android.
 
 | # | Item | Status |
 |---|---|---|
 | D1 | **Repetir a última área** (região fixa) por atalho, ex.: Shift+F9 💡 | ⬜ |
 | D2 | **Editar o texto do OCR** no balão e traduzir de novo 💡 | ⬜ |
-| D3 | **Traduzir texto digitado/colado** 💡 | ⬜ |
-| D4 | Tutorial curto na primeira abertura 💡 | ⬜ |
+| D3 | **Traduzir texto digitado/colado** 💡 (como a aba Traduções do Android) | ⬜ |
+| D4 | Tutorial curto na primeira abertura 💡 (como o do Android) | ⬜ |
+| D10 | Modos automáticos (região e tela cheia), como no Android | ⬜ |
+| D11 | Rodapé do modelo no balão troca o modelo e traduz de novo (no Android já faz) | ⬜ |
+| D12 | OCR melhor que o ocrs: Windows.Media.Ocr (Windows) e PaddleOCR/RapidOCR (Linux), medindo antes | ⬜ |
 | D5 | Garantir que o balão **nunca entra na captura** quando está em cima da área selecionada | ⬜ |
 | D6 | "Salvar no vocabulário" (decidir onde ver/revisar as palavras) | ⬜ |
 | D7 | Ajustar a espera de 120 ms antes da captura (depois de testar no Windows) | ⬜ |

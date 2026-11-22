@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.MaterialTheme
@@ -65,8 +66,10 @@ fun MoreScreen(onOpen: (route: String) -> Unit) {
             }
             SectionTitle(stringResource(R.string.more_section_support))
             SectionCard(padding = false) {
+                SettingRow(Icons.Filled.School, icons.green, stringResource(R.string.more_tutorial),
+                    subtitle = stringResource(R.string.more_tutorial_desc), onClick = { onOpen(Routes.TUTORIAL) })
                 SettingRow(Icons.Filled.BatteryAlert, icons.red, stringResource(R.string.more_battery),
-                    subtitle = stringResource(R.string.more_battery_desc), onClick = { onOpen(Routes.BATTERY) })
+                    subtitle = stringResource(R.string.more_battery_desc), divider = true, onClick = { onOpen(Routes.BATTERY) })
                 SettingRow(Icons.Filled.ErrorOutline, icons.orange, stringResource(R.string.more_errors),
                     subtitle = stringResource(R.string.more_errors_desc), divider = true, onClick = { onOpen(Routes.ERRORS) })
                 SettingRow(Icons.Filled.Info, icons.blue, stringResource(R.string.more_about),

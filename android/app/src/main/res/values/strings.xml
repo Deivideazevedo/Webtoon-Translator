@@ -30,6 +30,8 @@
     <string name="mode_region_desc">Toque no ícone e arraste a setinha sobre o balão</string>
     <string name="mode_fixed_region_desc">Marque a área uma vez e traduza de novo com um toque</string>
     <string name="mode_full_screen_desc">Traduz todos os balões da tela com um toque</string>
+    <string name="mode_auto_region_desc">Marque a área uma vez; traduz sozinho quando o texto dela muda</string>
+    <string name="mode_auto_full_screen_desc">Traduz todos os balões sozinho sempre que você para de rolar</string>
     <string name="last_translation">Última tradução</string>
 
     <!-- Mais -->
@@ -163,6 +165,9 @@
     <string name="mode_region">Região</string>
     <string name="mode_fixed_region">Região fixa</string>
     <string name="mode_full_screen">Tela cheia</string>
+    <string name="mode_auto_region">Região automática</string>
+    <string name="mode_auto_full_screen">Tela cheia automática</string>
+    <string name="auto_full_screen_hint">Role a página: quando parar, os balões da tela são traduzidos sozinhos</string>
     <string name="full_screen_hint">Toque no ícone pra traduzir a tela; toque numa tradução pra ver os detalhes</string>
     <string name="full_screen_reading">Lendo e traduzindo a tela…</string>
     <string name="cd_speak">Ouvir</string>
@@ -173,6 +178,9 @@
     <string name="cd_options">Opções</string>
     <string name="options_reading">Leitura</string>
     <string name="options_speech_speed">Velocidade da voz</string>
+    <string name="type_to_translate">Digite ou cole uma frase em inglês</string>
+    <string name="cd_paste">Colar</string>
+    <string name="cd_translate">Traduzir</string>
     <string name="cd_change_model">Trocar o modelo e traduzir de novo</string>
     <string name="notification_channel">Tradutor flutuante</string>
     <string name="notification_title">Tradutor flutuante ligado</string>
@@ -199,10 +207,6 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
     <string name="speak_normal">🔊</string>
     <string name="speak_slow">🐢</string>
     <string name="pronunciation">🗣 %1$s</string>
-    <string name="pronunciation_show_ipa">IPA</string>
-    <string name="pronunciation_show_pt">PT</string>
-    <string name="learn_show">📖 Aprender ▾</string>
-    <string name="learn_hide">📖 Aprender ▴</string>
 
     <!-- Erros e avisos -->
     <string name="error_not_configured">Configure a chave de API e o modelo em ⚙ Configurações.</string>
@@ -227,4 +231,21 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
     <string name="settings_reset_speed">↺ Voltar ao padrão</string>
     <string name="settings_save">Salvar</string>
     <string name="settings_saved">Configurações salvas.</string>
+
+    <!-- Tutorial -->
+    <string name="more_tutorial">Tutorial</string>
+    <string name="more_tutorial_desc">Como usar o tradutor, passo a passo</string>
+    <string name="tutorial_skip">Pular</string>
+    <string name="tutorial_next">Próximo</string>
+    <string name="tutorial_done">Começar</string>
+    <string name="tutorial_1_title">Conecte a sua IA</string>
+    <string name="tutorial_1_body">Em Mais → Conexão, escolha o provedor e cole a chave de API (ou o endereço do seu servidor, como o OmniRoute). Depois escolha o modelo na tela Inicial; o benchmark mostra qual responde mais rápido.</string>
+    <string name="tutorial_2_title">Ligue o tradutor flutuante</string>
+    <string name="tutorial_2_body">Toque em ▶ na tela Inicial e permita mostrar por cima de outros apps e capturar a tela. Aparece uma bolinha que fica por cima do app de leitura. Segure a bolinha pra abrir o menu (modo, abrir o app, parar).</string>
+    <string name="tutorial_3_title">Escolha o modo</string>
+    <string name="tutorial_3_body">Região: toque na bolinha e arraste a setinha sobre o balão. Região fixa: marque a área uma vez e traduza com um toque. Tela cheia: traduz todos os balões de uma vez. Os automáticos traduzem sozinhos quando o texto muda ou quando você para de rolar.</string>
+    <string name="tutorial_4_title">Aprenda com cada balão</string>
+    <string name="tutorial_4_body">No cartão, 🔊 lê o inglês e 🐢 lê devagar. Toque numa palavra pontilhada pra ver a tradução dela. O 📖 abre os trechos e a gramática, e o rodapé do modelo troca a IA e traduz de novo.</string>
+    <string name="tutorial_5_title">Seu histórico</string>
+    <string name="tutorial_5_body">Em Traduções ficam as recentes e as favoritas (★). Lá dá pra digitar ou colar qualquer frase em inglês e ver a mesma análise. Em Mais → Backup você leva tudo pro computador.</string>
 </resources>

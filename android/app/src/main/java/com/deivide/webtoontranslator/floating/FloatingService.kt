@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -26,6 +27,7 @@ import com.deivide.webtoontranslator.R
 import com.deivide.webtoontranslator.WebtoonApp
 import com.deivide.webtoontranslator.data.settings.TranslationMode
 import com.deivide.webtoontranslator.domain.model.ScreenBlock
+import com.deivide.webtoontranslator.domain.model.Translation
 import com.deivide.webtoontranslator.ui.common.ModelListLoader
 import com.deivide.webtoontranslator.ui.common.resolve
 import com.deivide.webtoontranslator.ui.common.toUiText
@@ -38,7 +40,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 /**
  * Tradutor flutuante: serviço em primeiro plano que mantém a captura de tela e as janelas por
@@ -82,6 +87,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
             onOptionsChange = actions::updateOptions,
             onClose = ::closeCard,
             onRetry = { lastRun?.invoke() },
+            onPickModel = ::openModelPicker,
         )
     }
 
@@ -128,6 +134,8 @@ class FloatingService : Service(), FloatingIcon.Listener {
         icon = FloatingIcon(this, windows, this).also { it.show() }
         // O modo pode mudar por fora (tela Inicial); o ícone se ajusta sozinho.
         scope.launch { settings.mode.collect(::applyMode) }
+        // Carrega o modelo do OCR já (a 1ª leitura não paga isso).
+        scope.launch { container.translationRepository.warmUpOcr() }
         // A opção pode mudar com o cartão aberto (⚙ do cartão ou Mais → Aparência).
         scope.launch { settings.backClosesBubbles.collect { cardOverlay?.setOnBack(backClosesBubbles()) } }
         container.floatingStatus.set(true)
@@ -159,7 +167,8 @@ class FloatingService : Service(), FloatingIcon.Listener {
     override fun onTap() {
         closeMenu()
         when (mode) {
-            TranslationMode.FULL_SCREEN -> if (screenBlocks?.isShown == true) screenBlocks?.remove() else translateFullScreen()
+            TranslationMode.FULL_SCREEN, TranslationMode.AUTO_FULL_SCREEN ->
+                if (screenBlocks?.isShown == true) screenBlocks?.remove() else translateFullScreen()
             else -> {
                 val region = settings.fixedRegion
                 if (region == null || reviewFixedRegion) openEditor() else translateRegion(region)
@@ -204,12 +213,13 @@ class FloatingService : Service(), FloatingIcon.Listener {
     private var appliedMode: TranslationMode? = null
 
     private fun applyMode(newMode: TranslationMode) {
-        if (appliedMode != null && newMode != appliedMode && newMode == TranslationMode.FIXED_REGION) {
+        if (appliedMode != null && newMode != appliedMode && newMode.usesFixedRegion) {
             reviewFixedRegion = true
         }
         appliedMode = newMode
         icon?.tapArms = newMode == TranslationMode.REGION
         screenBlocks?.remove()
+        updateWatcher(newMode)
     }
 
     /** Troca pelo menu do ícone (o editor já abre aqui, então não precisa revisar no próximo toque). */
@@ -219,8 +229,9 @@ class FloatingService : Service(), FloatingIcon.Listener {
         settings.translationMode = newMode
         when (newMode) {
             // Sempre mostra a área (a salva, se houver) pra conferir/ajustar antes de traduzir.
-            TranslationMode.FIXED_REGION -> openEditor()
+            TranslationMode.FIXED_REGION, TranslationMode.AUTO_REGION -> openEditor()
             TranslationMode.FULL_SCREEN -> showHint(R.string.full_screen_hint)
+            TranslationMode.AUTO_FULL_SCREEN -> showHint(R.string.auto_full_screen_hint)
             TranslationMode.REGION -> Unit
         }
     }
@@ -229,16 +240,21 @@ class FloatingService : Service(), FloatingIcon.Listener {
 
     private fun translateRegion(region: Rect) {
         translationJob?.cancel()
+        lastAutoText = ""
         translationJob = scope.launch {
             val shot = captureWithoutOverlays() ?: return@launch
-            val bounds = Rect(0, 0, shot.width, shot.height)
-            if (!bounds.intersect(region)) return@launch
-            val crop = Bitmap.createBitmap(shot, bounds.left, bounds.top, bounds.width(), bounds.height())
+            val crop = crop(shot, region) ?: return@launch
             showCard(region)
             // "Tentar de novo" reaproveita a mesma captura (a página pode já ter rolado).
             lastRun = { runOnCard { container.regionTranslator.translate(crop) } }
             container.regionTranslator.translate(crop).collect { card.value = it }
         }
+    }
+
+    private fun crop(shot: Bitmap, region: Rect): Bitmap? {
+        val bounds = Rect(0, 0, shot.width, shot.height)
+        if (!bounds.intersect(region)) return null
+        return Bitmap.createBitmap(shot, bounds.left, bounds.top, bounds.width(), bounds.height())
     }
 
     /** Roda uma tradução no cartão que já está aberto (sem mexer na posição dele). */
@@ -263,17 +279,22 @@ class FloatingService : Service(), FloatingIcon.Listener {
         if (text.isNotBlank()) runOnCard { container.regionTranslator.translateText(text) } else lastRun?.invoke()
     }
 
-    /** Tela cheia: acha os balões, traduz todos numa chamada e põe cada tradução em cima do seu. */
-    private fun translateFullScreen() {
+    /**
+     * Tela cheia: acha os balões, traduz todos numa chamada e põe cada tradução em cima do seu.
+     * [auto] (tela cheia automática): sem aviso de "lendo" nem de erro, e só os balões novos vão pra IA.
+     */
+    private fun translateFullScreen(auto: Boolean = false) {
         translationJob?.cancel()
         closeCard()
         screenBlocks?.remove()
         translationJob = scope.launch {
             val shot = captureWithoutOverlays() ?: return@launch
-            showHint(R.string.full_screen_reading, autoHide = false)
+            if (!auto) showHint(R.string.full_screen_reading, autoHide = false)
             val (statusBar, navigationBar) = systemBarHeights(this@FloatingService)
             val result = try {
-                container.screenTranslator.translate(shot, statusBar, navigationBar)
+                container.screenTranslator.translate(
+                    shot, statusBar, navigationBar, cache = autoBlocks.takeIf { mode.isAutomatic },
+                )
             } catch (e: Exception) {
                 ScreenTranslator.Result.Failed(e.toUiText())
             } finally {
@@ -282,7 +303,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
             }
             when (result) {
                 is ScreenTranslator.Result.Blocks -> screenBlocks?.show(result.blocks, topLimit = statusBar)
-                is ScreenTranslator.Result.Failed -> toast(result.message.resolve(this@FloatingService))
+                is ScreenTranslator.Result.Failed -> if (!auto) toast(result.message.resolve(this@FloatingService))
             }
         }
     }
@@ -297,19 +318,37 @@ class FloatingService : Service(), FloatingIcon.Listener {
         }
     }
 
-    /** Esconde tudo que é nosso, captura e mostra de novo (senão o OCR lê o próprio cartão). */
-    private suspend fun captureWithoutOverlays(): Bitmap? {
+    /**
+     * Captura sem o que é nosso (senão o OCR lê o próprio cartão): o cartão é escondido; o ícone e
+     * a dica ficam na tela e são apagados da imagem (pintados por cima), o que dispensa esperar um
+     * quadro novo e garante que o "—" do ícone nunca vire um traço no texto lido.
+     */
+    private suspend fun captureWithoutOverlays(): Bitmap? =
+        captureWithout(listOfNotNull(cardOverlay?.let { it::setHidden }), maskedWindows())
+
+    /**
+     * Só a [area]: esconde apenas o que está em cima dela (região automática: o cartão fica fora
+     * da área, então não pisca a cada leitura).
+     */
+    private suspend fun captureArea(area: Rect): Bitmap? = captureWithout(
+        listOfNotNull(cardOverlay?.takeIf { it.screenRect()?.let { r -> Rect.intersects(r, area) } == true }?.let { it::setHidden }),
+        maskedWindows().filter { Rect.intersects(it, area) },
+    )
+
+    /** Janelas nossas que ficam na tela na captura e são apagadas da imagem: o ícone e a dica. */
+    private fun maskedWindows(): List<Rect> = listOfNotNull(icon?.position, hintOverlay?.screenRect())
+
+    /** Esconde as janelas de [hide], captura (apagando as áreas de [mask]) e mostra de novo. */
+    private suspend fun captureWithout(hide: List<(Boolean) -> Unit>, mask: List<Rect>): Bitmap? {
         val capturer = capturer ?: return null
-        icon?.setHidden(true)
-        cardOverlay?.setHidden(true)
+        hide.forEach { it(true) }
         return try {
-            capturer.capture()
+            capturer.capture(waitForNewFrame = hide.isNotEmpty(), mask = mask)
         } catch (e: Exception) {
             card.value = TranslationCardState.Failed(e.toUiText())
             null
         } finally {
-            icon?.setHidden(false)
-            cardOverlay?.setHidden(false)
+            hide.forEach { it(false) }
         }
     }
 
@@ -328,9 +367,8 @@ class FloatingService : Service(), FloatingIcon.Listener {
         cardParams = params
         val controls = FloatingCardControls(
             onDrag = ::dragCard,
-            onReselect = if (mode == TranslationMode.FIXED_REGION) ::openEditor else null,
+            onReselect = if (mode.usesFixedRegion) ::openEditor else null,
             onOptions = ::openOptions,
-            onPickModel = ::openModelPicker,
         )
         cardOverlay = ComposeOverlay(this, windows, backHandler = backClosesBubbles()) {
             FloatingTranslationCard(
@@ -451,6 +489,162 @@ class FloatingService : Service(), FloatingIcon.Listener {
         }
     }
 
+    // --- Modos automáticos (LAYOUT.md §5.7) ---
+
+    private var watcher: Job? = null
+    private var watcherMode: TranslationMode? = null
+    /**
+     * Desde quando a tela está mudando sem ter sido traduzida (0 = nada pendente). A vigia traduz
+     * quando ela fica parada [SETTLE_MS]; confirmar a área no editor também marca uma pendência.
+     */
+    private var autoPendingSince = 0L
+    /** Leitura da área na região automática (separada da tradução, que pode continuar chegando). */
+    private var autoJob: Job? = null
+    /** Texto do OCR da última tradução automática da área (o mesmo texto não é traduzido de novo). */
+    private var lastAutoText = ""
+    /** Traduções feitas nos modos automáticos (texto do OCR → resultado): não paga duas vezes. */
+    private val autoCards = lruMap<String, Translation>(AUTO_CACHE_SIZE)
+    private val autoBlocks = lruMap<String, String>(AUTO_CACHE_SIZE)
+
+    /**
+     * Liga a vigia da tela nos modos automáticos e desliga nos outros. Usa o [newMode] recebido (a
+     * preferência pode ainda não ter sido gravada) e não reinicia se já está vigiando esse modo
+     * (a troca chega aqui duas vezes: pelo menu e pela preferência).
+     */
+    private fun updateWatcher(newMode: TranslationMode) {
+        if (newMode == watcherMode && watcher?.isActive == true) return
+        watcher?.cancel()
+        watcher = null
+        watcherMode = null
+        autoJob?.cancel()
+        lastAutoText = ""
+        if (newMode.isAutomatic) {
+            watcherMode = newMode
+            watcher = scope.launch { watch() }
+        }
+    }
+
+    /**
+     * Compara a tela de tempos em tempos (uma grade de pontos, fora das nossas janelas). Quando ela
+     * muda e depois fica parada por [SETTLE_MS], traduz sozinho. Não roda com sheet, editor ou (na
+     * tela cheia) o cartão aberto. Ao ligar, traduz o que já está na tela.
+     */
+    private suspend fun watch() {
+        var previous: IntArray? = null
+        autoPendingSince = SystemClock.uptimeMillis()
+        while (true) {
+            delay(WATCH_INTERVAL_MS)
+            val capturer = capturer ?: continue
+            val area = autoArea()
+            if (area == null || sheet != null || editor != null || (mode == TranslationMode.AUTO_FULL_SCREEN && cardOverlay != null)) {
+                previous = null
+                continue
+            }
+            val exclude = ownWindows()
+            val current = withContext(Dispatchers.Default) { capturer.signature(area, exclude) } ?: continue
+            val before = previous
+            previous = current
+            val now = SystemClock.uptimeMillis()
+            if (before != null && screenChanged(before, current)) {
+                if (autoPendingSince == 0L) onAutoChange()
+                autoPendingSince = now
+            } else if (autoPendingSince != 0L && now - autoPendingSince >= SETTLE_MS && !autoBusy()) {
+                autoPendingSince = 0L
+                autoTranslate()
+            }
+        }
+    }
+
+    /**
+     * Ainda trabalhando na última mudança. Na região automática só a leitura conta: uma tradução
+     * ainda chegando pode ser trocada por um texto novo.
+     */
+    private fun autoBusy() = when (mode) {
+        TranslationMode.AUTO_REGION -> autoJob?.isActive == true
+        else -> translationJob?.isActive == true
+    }
+
+    private fun autoArea(): Rect? = when (mode) {
+        TranslationMode.AUTO_REGION -> settings.fixedRegion
+        TranslationMode.AUTO_FULL_SCREEN -> {
+            val (statusBar, navigationBar) = systemBarHeights(this)
+            screenBounds(this).apply { top += statusBar; bottom -= navigationBar }
+        }
+        else -> null
+    }
+
+    /** As nossas janelas na tela: não contam como mudança (nem quando somem pra captura). */
+    private fun ownWindows(): List<Rect> = buildList {
+        icon?.position?.let(::add)
+        cardOverlay?.screenRect()?.let(::add)
+        hintOverlay?.screenRect()?.let(::add)
+        screenBlocks?.rects()?.let(::addAll)
+    }
+
+    /** A tela começou a mudar (rolagem): na tela cheia, as traduções saem (ficariam fora do lugar). */
+    private fun onAutoChange() {
+        if (mode != TranslationMode.AUTO_FULL_SCREEN) return
+        translationJob?.cancel()
+        screenBlocks?.remove()
+    }
+
+    private fun autoTranslate() {
+        when (mode) {
+            TranslationMode.AUTO_REGION -> settings.fixedRegion?.let(::autoTranslateRegion)
+            TranslationMode.AUTO_FULL_SCREEN -> if (screenBlocks?.isShown != true) translateFullScreen(auto = true)
+            else -> Unit
+        }
+    }
+
+    /**
+     * Região automática: lê a área e só traduz (e só mexe no cartão) se o texto mudou de verdade
+     * ([AutoText.same]: rolagem leve ou uma letra lida diferente não contam). Traduz logo após a
+     * leitura e confere [STABLE_RECHECK_MS] depois: se o texto ainda estava crescendo (texto
+     * "digitado" em jogos, quadrinho animado) e a tela continua mudando, a tradução parcial é
+     * cancelada e a vigia traduz o texto completo quando a tela parar.
+     */
+    private fun autoTranslateRegion(region: Rect) {
+        autoJob = scope.launch {
+            val first = readArea(region) ?: return@launch
+            if (AutoText.same(AutoText.normalize(lastAutoText), AutoText.normalize(first))) return@launch
+            translateAuto(region, first)
+            delay(STABLE_RECHECK_MS)
+            val again = readArea(region) ?: return@launch
+            if (AutoText.same(AutoText.normalize(first), AutoText.normalize(again))) return@launch
+            // Só cancela se a tela ainda está mudando (aí a vigia traduz o texto completo); com a
+            // tela parada, a diferença é variação do OCR e a tradução continua.
+            if (autoPendingSince != 0L) {
+                translationJob?.cancel()
+                lastAutoText = ""
+            }
+        }
+    }
+
+    /** Mostra o texto lido no cartão: do cache ou pedindo à IA. */
+    private fun translateAuto(region: Rect, text: String) {
+        lastAutoText = text
+        if (cardOverlay == null) showCard(region)
+        lastRun = { runOnCard { container.regionTranslator.translateText(text) } }
+        val key = AutoText.normalize(text)
+        AutoText.find(autoCards, key)?.let {
+            translationJob?.cancel()
+            card.value = TranslationCardState.Done(it)
+            return
+        }
+        runOnCard {
+            container.regionTranslator.translateText(text).onEach {
+                if (it is TranslationCardState.Done) autoCards[key] = it.translation
+            }
+        }
+    }
+
+    /** Texto da área agora (vazio ou erro = null). */
+    private suspend fun readArea(region: Rect): String? {
+        val shot = captureArea(region) ?: return null
+        val crop = crop(shot, region) ?: return null
+        return runCatching { container.translationRepository.recognize(crop) }.getOrNull()?.trim()?.ifBlank { null }
+    }
+
     // --- Região fixa ---
 
     private fun openEditor() {
@@ -463,7 +657,13 @@ class FloatingService : Service(), FloatingIcon.Listener {
             onConfirm = { region ->
                 closeEditor()
                 settings.fixedRegion = region
-                translateRegion(region)
+                if (mode == TranslationMode.AUTO_REGION) {
+                    // A vigia traduz assim que a tela (já sem o editor) ficar parada: uma leitura só.
+                    lastAutoText = ""
+                    autoPendingSince = SystemClock.uptimeMillis()
+                } else {
+                    translateRegion(region)
+                }
             },
             onCancel = ::closeEditor,
         ).also { it.show() }
@@ -519,6 +719,33 @@ class FloatingService : Service(), FloatingIcon.Listener {
         private const val HINT_MS = 2_500L
         private const val SHEET_EXIT_MS = 300L
         private const val SPEED_SAMPLE = "Hey! Let's read some webtoons together."
+        private const val WATCH_INTERVAL_MS = 100L
+        /** A tela precisa ficar parada esse tempo pra contar como "parou de rolar". */
+        private const val SETTLE_MS = 500L
+        /** Texto novo é conferido de novo depois desse tempo (texto "digitado" que ainda crescia). */
+        private const val STABLE_RECHECK_MS = 600L
+        private const val AUTO_CACHE_SIZE = 200
+        /** Um ponto mudou se o brilho variou mais que isso (0–255)… */
+        private const val POINT_DELTA = 24
+        /** …e a tela mudou se ao menos essa fração dos pontos mudou (ignora cursor piscando, relógio). */
+        private const val CHANGED_FRACTION = 0.01
+
+        /** Dois quadros diferem de verdade (pontos fora das nossas janelas nos dois). */
+        private fun screenChanged(a: IntArray, b: IntArray): Boolean {
+            var valid = 0
+            var changed = 0
+            for (i in a.indices) {
+                if (a[i] < 0 || b[i] < 0) continue
+                valid++
+                if (abs(a[i] - b[i]) > POINT_DELTA) changed++
+            }
+            return valid > 0 && changed >= maxOf(4, (valid * CHANGED_FRACTION).toInt())
+        }
+
+        /** Mapa que esquece o menos usado quando passa de [max] itens. */
+        private fun <K, V> lruMap(max: Int): MutableMap<K, V> = object : LinkedHashMap<K, V>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?) = size > max
+        }
 
         /** Liga o tradutor com a permissão de captura que o usuário acabou de dar. */
         fun start(context: Context, resultCode: Int, data: Intent) {

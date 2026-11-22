@@ -67,6 +67,13 @@ class TranslationsViewModel(
 
     fun closeOpened() = local.update { it.copy(opened = null) }
 
+    /** Traduz uma frase digitada ou colada (vai pros Recentes como as outras). */
+    fun translateTyped(text: String) {
+        if (text.isNotBlank()) local.update { it.copy(typed = text.trim(), opened = null) }
+    }
+
+    fun closeTyped() = local.update { it.copy(typed = null) }
+
     fun toggleFavorite(translation: Translation) {
         viewModelScope.launch {
             runCatching { actions.toggleFavorite(translation) }.onFailure { notify(it.toUiText()) }

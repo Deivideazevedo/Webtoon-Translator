@@ -57,6 +57,7 @@ class BackupRepository(
         // O desktop guarda a velocidade na escala do motor (0,7 = padrão); o Android mostra 1,0x.
         json.put("speech_speed", AppSettings.nativeRate(current.speechSpeed).toDouble())
         json.put("bubble_opacity", settings.cardOpacity.value.toDouble())
+        json.put("back_closes_bubbles", settings.backClosesBubbles.value)
         val favorites = JSONObject()
         Provider.entries.forEach { p -> favorites.put(p.id, JSONArray(settings.favoritesOf(p))) }
         json.put("favorites", favorites)
@@ -75,6 +76,7 @@ class BackupRepository(
             settings.setSpeechSpeed(speed.coerceIn(AppSettings.SPEECH_SPEED_RANGE))
         }
         if (json.has("bubble_opacity")) settings.setCardOpacity(json.getDouble("bubble_opacity").toFloat())
+        if (json.has("back_closes_bubbles")) settings.setBackClosesBubbles(json.getBoolean("back_closes_bubbles"))
         // Favoritos: soma os do backup aos daqui (como o desktop faz), sem repetir.
         json.optJSONObject("favorites")?.let { favorites ->
             Provider.entries.forEach { p ->

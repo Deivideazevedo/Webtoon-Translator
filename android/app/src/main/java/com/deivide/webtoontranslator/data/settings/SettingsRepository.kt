@@ -209,6 +209,11 @@ class SettingsRepository(context: Context) {
         get() = prefs.getString(KEY_FIXED_REGION, null)?.let(Rect::unflattenFromString)
         set(value) = prefs.edit { putString(KEY_FIXED_REGION, value?.flattenToString()) }
 
+    /** O tutorial já abriu uma vez (na primeira abertura do app). */
+    var tutorialSeen: Boolean
+        get() = prefs.getBoolean(KEY_TUTORIAL_SEEN, false)
+        set(value) = prefs.edit { putBoolean(KEY_TUTORIAL_SEEN, value) }
+
     /** "Não mostrar novamente" na explicação da captura de tela. */
     var skipCaptureExplanation: Boolean
         get() = prefs.getBoolean(KEY_SKIP_CAPTURE_EXPLANATION, false)
@@ -222,6 +227,7 @@ class SettingsRepository(context: Context) {
         val CARD_OPACITY_RANGE = 0.5f..1f
         private const val KEY_CARD_OPACITY = "card_opacity"
         private const val KEY_BACK_CLOSES = "back_closes_bubbles"
+        private const val KEY_TUTORIAL_SEEN = "tutorial_seen"
         private const val KEY_DESKTOP_EXTRAS = "desktop_extras"
         private const val KEY_BENCHMARK = "benchmark"
         val PITCH_RANGE = 0.5f..1.5f
