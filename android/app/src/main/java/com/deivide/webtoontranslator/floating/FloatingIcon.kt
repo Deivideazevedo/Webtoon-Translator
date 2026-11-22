@@ -246,7 +246,12 @@ class FloatingIcon(
 
     private class IconView(context: Context, private val size: Int, private val caretHeight: Int) : View(context) {
         private val logo: Bitmap = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
-        private val background = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ACCENT }
+        // Sombra contida (curta, rente à borda, um pouco pra baixo/direita): dá recorte em página
+        // branca sem contorno nem halo espalhado.
+        private val background = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = ACCENT
+            setShadowLayer(SHADOW_RADIUS * size, SHADOW_DX * size, SHADOW_DY * size, SHADOW)
+        }
         private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             style = Paint.Style.STROKE
@@ -254,12 +259,15 @@ class FloatingIcon(
         }
         private val caret = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = size * 0.07f
+            strokeWidth = size * 0.085f
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
+            // A mesma sombra contida: até a setinha branca (armada) aparece em página branca.
+            setShadowLayer(SHADOW_RADIUS * size * 0.8f, SHADOW_DX * size, SHADOW_DY * size, SHADOW)
         }
         private val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         private val caretPath = Path()
+        private val contentClip = Path()
 
         var armed = false
             set(value) {
@@ -271,7 +279,8 @@ class FloatingIcon(
             val r = size / 2f
             // Setinha: chevron baixo e largo; a ponta (topo da janela) é o ponto da seleção.
             val half = size * 0.15f
-            val stroke = caret.strokeWidth / 2
+            // Folga em cima pra sombra/traço não serem cortados pela borda da janela.
+            val stroke = caret.strokeWidth / 2 + size * 0.01f
             val bottom = stroke + size * 0.1f
             caretPath.reset()
             caretPath.moveTo(r - half, bottom)
@@ -280,19 +289,37 @@ class FloatingIcon(
             caret.color = if (armed) Color.WHITE else ACCENT
             canvas.drawPath(caretPath, caret)
 
-            canvas.translate(0f, caretHeight.toFloat())
-            canvas.drawCircle(r, r, r * 0.92f, background)
+            // A bola fica um pouco acima do fim da área da setinha (vão curto entre as duas, sem a
+            // setinha encostar no anel branco de "armado"); a ponta da setinha não se move.
+            canvas.translate(0f, caretHeight - BALL_LIFT_DP * resources.displayMetrics.density)
+            // O círculo azul vai só até onde começa o anel de "armado": parado não sobra faixa azul
+            // em volta; armado, o anel branco aparece em volta dele (no mesmo lugar de sempre).
+            val outer = r * 0.9f
+            val content = outer - ring.strokeWidth
+            canvas.drawCircle(r, r, content, background)
+            canvas.save()
+            contentClip.reset()
+            contentClip.addCircle(r, r, content, Path.Direction.CW)
+            canvas.clipPath(contentClip) // os cantos do ícone do app não passam do círculo
             val inset = size * 0.2f
             canvas.drawBitmap(logo, null, RectF(inset, inset, size - inset, size - inset), logoPaint)
-            if (armed) canvas.drawCircle(r, r, r * 0.92f - ring.strokeWidth / 2, ring)
+            canvas.restore()
+            if (armed) canvas.drawCircle(r, r, outer - ring.strokeWidth / 2, ring)
         }
     }
 
     private companion object {
         const val ICON_DP = 50
         const val CARET_DP = 14
-        const val DIM_AFTER_MS = 2_500L
+        const val DIM_AFTER_MS = 2_000L
         const val DIM_ALPHA = 0.55f
         val ACCENT = Color.parseColor("#6EA8FE")
+        /** Sombra contida: raio curto e deslocamento pequeno (frações do tamanho do ícone). */
+        val SHADOW = Color.argb(85, 0, 0, 0)
+        const val SHADOW_RADIUS = 0.035f
+        const val SHADOW_DX = 0.012f
+        const val SHADOW_DY = 0.025f
+        /** Quanto a bola sobe em direção à setinha (vão final ≈ 2,75 dp com o ícone de 50 dp). */
+        const val BALL_LIFT_DP = 4f
     }
 }
