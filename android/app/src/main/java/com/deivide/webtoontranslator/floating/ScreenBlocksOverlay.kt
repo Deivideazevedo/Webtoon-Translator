@@ -34,6 +34,8 @@ class ScreenBlocksOverlay(
     private val windows: WindowManager,
     private val onOpen: (ScreenBlock) -> Unit,
     private val onDismiss: () -> Unit,
+    /** O que o voltar faz em cada tradução (null = vai pro app de baixo); lido a cada [show]. */
+    private val onBack: () -> (() -> Unit)?,
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private val overlays = mutableListOf<ComposeOverlay>()
@@ -46,6 +48,7 @@ class ScreenBlocksOverlay(
     fun show(blocks: List<ScreenBlock>, topLimit: Int) {
         remove()
         val screen = screenBounds(context)
+        val back = onBack()
         for (block in blocks) {
             val width = (block.right - block.left).coerceAtLeast(minWidth).coerceAtMost(screen.width())
             val params = overlayParams(width, ViewGroup.LayoutParams.WRAP_CONTENT, gravity = Gravity.TOP or Gravity.START).apply {
@@ -59,6 +62,7 @@ class ScreenBlocksOverlay(
                 context, windows,
                 onOutsideTouch = ::onOutside,
                 onTouchDown = { lastBlockTouch = SystemClock.uptimeMillis() },
+                backHandler = back,
             ) {
                 BlockLabel(
                     text = block.translation,

@@ -17,12 +17,16 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
 import com.deivide.webtoontranslator.MainActivity
 import com.deivide.webtoontranslator.R
 import com.deivide.webtoontranslator.WebtoonApp
 import com.deivide.webtoontranslator.data.settings.TranslationMode
 import com.deivide.webtoontranslator.domain.model.ScreenBlock
+import com.deivide.webtoontranslator.ui.common.ModelListLoader
 import com.deivide.webtoontranslator.ui.common.resolve
 import com.deivide.webtoontranslator.ui.common.toUiText
 import com.deivide.webtoontranslator.ui.translation.TranslationCardActions
@@ -56,13 +60,15 @@ class FloatingService : Service(), FloatingIcon.Listener {
     private var editor: FixedRegionEditor? = null
     private var cardOverlay: ComposeOverlay? = null
     private var cardParams: WindowManager.LayoutParams? = null
-    private var menuOverlay: ComposeOverlay? = null
     private var hintOverlay: ComposeOverlay? = null
     private var screenBlocks: ScreenBlocksOverlay? = null
+    private var sheet: ComposeOverlay? = null
+    private val sheetOpen = MutableStateFlow(false)
+    private val modelLoader by lazy { ModelListLoader(container.translationRepository, scope) }
 
     private val card = MutableStateFlow<TranslationCardState?>(null)
     private var translationJob: Job? = null
-    /** Refaz a última tradução do cartão ("Tentar de novo"). */
+    /** Refaz a última tradução do cartão ("Tentar de novo"), com a mesma captura. */
     private var lastRun: (() -> Unit)? = null
 
     /** Modo atual; muda pelo menu do ícone ou pela tela Inicial (ver [applyMode]). */
@@ -116,10 +122,14 @@ class FloatingService : Service(), FloatingIcon.Listener {
         }, mainHandler)
         capturer = ScreenCapturer(this, projection)
         selection = SelectionOverlay(this, windows)
-        screenBlocks = ScreenBlocksOverlay(this, windows, onOpen = ::openBlock, onDismiss = { screenBlocks?.remove() })
+        screenBlocks = ScreenBlocksOverlay(
+            this, windows, onOpen = ::openBlock, onDismiss = { screenBlocks?.remove() }, onBack = ::backClosesBubbles,
+        )
         icon = FloatingIcon(this, windows, this).also { it.show() }
         // O modo pode mudar por fora (tela Inicial); o ícone se ajusta sozinho.
         scope.launch { settings.mode.collect(::applyMode) }
+        // A opção pode mudar com o cartão aberto (⚙ do cartão ou Mais → Aparência).
+        scope.launch { settings.backClosesBubbles.collect { cardOverlay?.setOnBack(backClosesBubbles()) } }
         container.floatingStatus.set(true)
     }
 
@@ -129,6 +139,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
         scope.cancel()
         closeMenu()
         closeEditor()
+        closeSheet()
         hintOverlay?.remove()
         cardOverlay?.remove()
         screenBlocks?.remove()
@@ -163,22 +174,18 @@ class FloatingService : Service(), FloatingIcon.Listener {
 
     override fun onMenu() {
         hintOverlay?.remove()
-        if (menuOverlay != null) return closeMenu()
-        val anchor = icon?.position ?: return
-        val params = overlayParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL,
-        ).apply { y = (anchor.bottom + MARGIN_PX).coerceAtMost(screenBounds(this@FloatingService).height() / 2) }
-        menuOverlay = ComposeOverlay(this, windows, onOutsideTouch = ::closeMenu) {
-            FloatingMenu(
+        if (sheet != null) return closeMenu()
+        openSheet { bottomInset ->
+            FloatingIconMenu(
+                open = sheetOpen,
+                bottomInset = bottomInset,
                 mode = mode,
                 onSelectMode = ::selectMode,
                 onOpenApp = ::openApp,
                 onStop = ::stopSelf,
-                onClose = ::closeMenu,
+                onClose = ::hideSheet,
             )
-        }.also { it.show(params) }
+        }
     }
 
     override fun onRegionChanged(region: Rect) {
@@ -221,7 +228,6 @@ class FloatingService : Service(), FloatingIcon.Listener {
     // --- Tradução ---
 
     private fun translateRegion(region: Rect) {
-        lastRun = { translateRegion(region) }
         translationJob?.cancel()
         translationJob = scope.launch {
             val shot = captureWithoutOverlays() ?: return@launch
@@ -229,8 +235,32 @@ class FloatingService : Service(), FloatingIcon.Listener {
             if (!bounds.intersect(region)) return@launch
             val crop = Bitmap.createBitmap(shot, bounds.left, bounds.top, bounds.width(), bounds.height())
             showCard(region)
+            // "Tentar de novo" reaproveita a mesma captura (a página pode já ter rolado).
+            lastRun = { runOnCard { container.regionTranslator.translate(crop) } }
             container.regionTranslator.translate(crop).collect { card.value = it }
         }
+    }
+
+    /** Roda uma tradução no cartão que já está aberto (sem mexer na posição dele). */
+    private fun runOnCard(translation: () -> kotlinx.coroutines.flow.Flow<TranslationCardState>) {
+        translationJob?.cancel()
+        translationJob = scope.launch { translation().collect { card.value = it } }
+    }
+
+    /** Inglês que está no cartão ("" se ainda não foi lido). */
+    private fun cardOriginal() = when (val state = card.value) {
+        is TranslationCardState.Done -> state.translation.originalText
+        is TranslationCardState.Streaming -> state.original
+        else -> ""
+    }
+
+    /**
+     * Troca de modelo pelo rodapé: traduz de novo o mesmo texto já lido (sem nova captura nem
+     * OCR), com o modelo atual. Se o texto nem chegou a ser lido, refaz a última tradução (mesma captura).
+     */
+    private fun retranslate() {
+        val text = cardOriginal()
+        if (text.isNotBlank()) runOnCard { container.regionTranslator.translateText(text) } else lastRun?.invoke()
     }
 
     /** Tela cheia: acha os balões, traduz todos numa chamada e põe cada tradução em cima do seu. */
@@ -259,7 +289,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
 
     /** Toque numa tradução da tela cheia: cartão completo (didático) daquele balão. */
     private fun openBlock(block: ScreenBlock) {
-        lastRun = { openBlock(block) }
+        lastRun = { runOnCard { container.regionTranslator.translateText(block.text) } }
         translationJob?.cancel()
         translationJob = scope.launch {
             showCard(Rect(block.left, block.top, block.right, block.bottom))
@@ -299,11 +329,14 @@ class FloatingService : Service(), FloatingIcon.Listener {
         val controls = FloatingCardControls(
             onDrag = ::dragCard,
             onReselect = if (mode == TranslationMode.FIXED_REGION) ::openEditor else null,
+            onOptions = ::openOptions,
+            onPickModel = ::openModelPicker,
         )
-        cardOverlay = ComposeOverlay(this, windows) {
+        cardOverlay = ComposeOverlay(this, windows, backHandler = backClosesBubbles()) {
             FloatingTranslationCard(
                 card, container.libraryRepository.library, container.translationActions.options, cardActions, controls,
                 opacity = settings.cardOpacity,
+                backCloses = settings.backClosesBubbles,
             )
         }.also { it.show(params) }
     }
@@ -316,12 +349,106 @@ class FloatingService : Service(), FloatingIcon.Listener {
         cardOverlay?.show(params)
     }
 
+    /** Opção "Voltar fecha as traduções": o voltar fecha o cartão e as da tela cheia. */
+    private fun backClosesBubbles(): (() -> Unit)? = if (settings.backClosesBubbles.value) ::closeBubbles else null
+
+    private fun closeBubbles() {
+        closeCard()
+        screenBlocks?.remove()
+    }
+
     private fun closeCard() {
+        closeSheet()
         translationJob?.cancel()
         card.value = null
         cardOverlay?.remove()
         cardOverlay = null
         cardParams = null
+    }
+
+    // --- Bottom sheets do cartão (modelo e ⚙ opções) ---
+
+    /**
+     * Abre um bottom sheet (janela da tela toda, por cima de tudo); só um por vez. [onBack]: o
+     * que o voltar faz (padrão: fechar o sheet).
+     */
+    private fun openSheet(onBack: () -> Unit = ::hideSheet, content: @Composable (bottomInset: Dp) -> Unit) {
+        if (sheet != null) return
+        val screen = screenBounds(this)
+        val bottomInset = (systemBarHeights(this).second / resources.displayMetrics.density).dp
+        sheetOpen.value = true
+        sheet = ComposeOverlay(this, windows, backHandler = onBack) { content(bottomInset) }
+            .also { it.show(overlayParams(screen.width(), screen.height())) }
+    }
+
+    /** Desce o sheet (animação) e tira a janela em seguida. */
+    private fun hideSheet() {
+        val current = sheet ?: return
+        sheetOpen.value = false
+        scope.launch {
+            delay(SHEET_EXIT_MS)
+            if (sheet === current) closeSheet()
+        }
+    }
+
+    private fun closeSheet() {
+        sheet?.remove()
+        sheet = null
+    }
+
+    /** Escolher um modelo já vira o padrão do app e retraduz o cartão com ele. */
+    private fun openModelPicker() {
+        val current = settings.current
+        val model = MutableStateFlow(current.value.model)
+        val speeds = MutableStateFlow(settings.benchmarks.value[current.value.provider]?.speeds.orEmpty())
+        openSheet { bottomInset ->
+            FloatingModelPicker(
+                open = sheetOpen,
+                bottomInset = bottomInset,
+                current = model,
+                favorites = settings.favoriteModels,
+                speeds = speeds,
+                models = modelLoader.list,
+                hasApiKey = current.value.apiKey.isNotBlank(),
+                onLoad = { modelLoader.load(current.value) },
+                onSelect = { id ->
+                    hideSheet()
+                    settings.selectModel(id)
+                    retranslate()
+                },
+                onToggleFavorite = { settings.toggleFavoriteModel(it) },
+                onClose = ::hideSheet,
+            )
+        }
+    }
+
+    /** ⚙ do cartão: modo, "voltar fecha as traduções" e velocidade da voz (subpágina). */
+    private fun openOptions() {
+        val page = MutableStateFlow(OptionsPage.MAIN)
+        val speed = MutableStateFlow(settings.load().speechSpeed)
+        openSheet(onBack = { if (page.value == OptionsPage.SPEED) page.value = OptionsPage.MAIN else hideSheet() }) { bottomInset ->
+            FloatingOptionsSheet(
+                open = sheetOpen,
+                bottomInset = bottomInset,
+                page = page,
+                mode = settings.mode,
+                backCloses = settings.backClosesBubbles,
+                speed = speed,
+                onSelectMode = { newMode ->
+                    hideSheet()
+                    if (newMode != mode) selectMode(newMode)
+                },
+                onBackClosesChange = settings::setBackClosesBubbles,
+                onPage = { page.value = it },
+                onSpeedChange = {
+                    speed.value = it
+                    settings.setSpeechSpeed(it)
+                },
+                // Ouve a velocidade na própria frase do cartão.
+                onSpeedPreview = { cardActions.onSpeak(cardOriginal().ifBlank { SPEED_SAMPLE }, false) },
+                onClose = ::hideSheet,
+            )
+        }
     }
 
     // --- Região fixa ---
@@ -349,10 +476,8 @@ class FloatingService : Service(), FloatingIcon.Listener {
 
     // --- Menu, dica e atalhos ---
 
-    private fun closeMenu() {
-        menuOverlay?.remove()
-        menuOverlay = null
-    }
+    /** Menu do ícone (e qualquer sheet aberto): desce e some. */
+    private fun closeMenu() = hideSheet()
 
     private fun showHint(@StringRes text: Int, autoHide: Boolean = true) {
         val anchor = icon?.position ?: return
@@ -392,6 +517,8 @@ class FloatingService : Service(), FloatingIcon.Listener {
         private const val MIN_REGION_PX = 24
         private const val HINT_OFFSET_PX = 140
         private const val HINT_MS = 2_500L
+        private const val SHEET_EXIT_MS = 300L
+        private const val SPEED_SAMPLE = "Hey! Let's read some webtoons together."
 
         /** Liga o tradutor com a permissão de captura que o usuário acabou de dar. */
         fun start(context: Context, resultCode: Int, data: Intent) {

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -50,7 +51,10 @@ import com.deivide.webtoontranslator.ui.components.SettingRow
 import com.deivide.webtoontranslator.ui.theme.AppTheme
 import kotlin.math.roundToInt
 
-/** Aparência (Mais → Aparência): tema, pronúncia em IPA e transparência do cartão flutuante. */
+/**
+ * Aparência (Mais → Aparência): tema, pronúncia em IPA, voltar fechando as traduções flutuantes e
+ * transparência do cartão flutuante.
+ */
 @Composable
 fun AppearanceScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -59,6 +63,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
     val reading = container.readingPreferences
     val theme by settings.theme.collectAsStateWithLifecycle()
     val opacity by settings.cardOpacity.collectAsStateWithLifecycle()
+    val backCloses by settings.backClosesBubbles.collectAsStateWithLifecycle()
     val options by reading.options.collectAsStateWithLifecycle()
     var choosingTheme by rememberSaveable { mutableStateOf(false) }
     val icons = AppTheme.colors.icons
@@ -98,6 +103,15 @@ fun AppearanceScreen(onBack: () -> Unit) {
                             onCheckedChange = { on -> reading.update { it.copy(ipaEnabled = on, showIpa = false) } },
                         )
                     },
+                )
+                SettingRow(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    color = icons.green,
+                    title = stringResource(R.string.appearance_back_closes),
+                    subtitle = stringResource(R.string.appearance_back_closes_desc),
+                    divider = true,
+                    onClick = { settings.setBackClosesBubbles(!backCloses) },
+                    trailing = { Switch(checked = backCloses, onCheckedChange = settings::setBackClosesBubbles) },
                 )
                 HorizontalDivider(Modifier.padding(start = 72.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {

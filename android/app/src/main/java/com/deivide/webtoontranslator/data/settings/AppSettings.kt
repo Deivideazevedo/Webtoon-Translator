@@ -28,8 +28,11 @@ data class AppSettings(
          */
         const val NATIVE_BASE = 0.7f
         const val DEFAULT_SPEECH_SPEED = 1f
-        /** 🐢: metade da fala normal. */
-        const val SLOW_SPEECH_SPEED = 0.5f
+        /**
+         * 🐢: bem devagar, pra ouvir a pronúncia. Fixo e de propósito abaixo do mínimo do slider
+         * ([SPEECH_SPEED_RANGE]), que é pra leitura normal.
+         */
+        const val SLOW_SPEECH_SPEED = 0.3f
         val SPEECH_SPEED_RANGE = 0.5f..1.5f
 
         /** Velocidade mostrada no app → a que o motor de voz do Android recebe. */

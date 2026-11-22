@@ -47,6 +47,8 @@
     <string name="appearance_ipa">Pronúncia em IPA</string>
     <string name="appearance_ipa_desc">Mostra o botão IPA no cartão pra alternar com a pronúncia em português</string>
     <string name="appearance_opacity">Transparência do cartão</string>
+    <string name="appearance_back_closes">Voltar fecha as traduções</string>
+    <string name="appearance_back_closes_desc">Com uma tradução flutuante aberta, o voltar fecha ela (e as da tela cheia) em vez de voltar no app de baixo</string>
     <string name="appearance_opacity_desc">Fundo do cartão de tradução flutuante; mais transparente deixa ver a arte do webtoon</string>
     <string name="appearance_opacity_sample">E o "Arqueiro Divino", que nunca errava um alvo…</string>
     <string name="more_backup">Backup</string>
@@ -153,7 +155,8 @@
     <string name="delete_confirm_body">Isso não pode ser desfeito.</string>
 
     <!-- Tradutor flutuante -->
-    <string name="floating_open_app">📱 Abrir o app</string>
+    <string name="floating_open_app">Abrir o app</string>
+    <string name="floating_section">Tradutor flutuante</string>
     <string name="floating_armed_hint">Arraste o ícone até o fim do balão e solte</string>
     <string name="fixed_region_select">Ajuste a área e toque em ✓</string>
     <string name="mode_title">Modo de tradução</string>
@@ -167,6 +170,10 @@
     <string name="cd_toggle_ipa">Alternar pronúncia PT-BR / IPA</string>
     <string name="cd_learn">Aprender: trechos e gramática</string>
     <string name="cd_reselect">Marcar a área de novo</string>
+    <string name="cd_options">Opções</string>
+    <string name="options_reading">Leitura</string>
+    <string name="options_speech_speed">Velocidade da voz</string>
+    <string name="cd_change_model">Trocar o modelo e traduzir de novo</string>
     <string name="notification_channel">Tradutor flutuante</string>
     <string name="notification_title">Tradutor flutuante ligado</string>
     <string name="notification_text">Toque no ícone e arraste-o sobre o balão pra traduzir.</string>
@@ -216,7 +223,7 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
     <string name="settings_hide_key">ocultar</string>
     <string name="settings_model">Modelo</string>
     <string name="settings_loading_models">Buscando modelos…</string>
-    <string name="settings_speech_default_hint">Padrão: 1,00x, a fala normal, boa pra acompanhar a leitura. O 🐢 fala em 0,50x.</string>
+    <string name="settings_speech_default_hint">Padrão: 1,00x, a fala normal, boa pra acompanhar a leitura.\nO 🐢 fala em 0,30x, bem devagar pra ouvir a pronúncia.</string>
     <string name="settings_reset_speed">↺ Voltar ao padrão</string>
     <string name="settings_save">Salvar</string>
     <string name="settings_saved">Configurações salvas.</string>

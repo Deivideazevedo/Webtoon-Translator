@@ -1,11 +1,14 @@
 package com.deivide.webtoontranslator.ui.components
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,28 +63,43 @@ fun ModelSheet(
 ) {
     LaunchedEffect(Unit) { onLoad() }
     OptionSheet(stringResource(R.string.model_sheet_title), onDismiss) {
-        if (!hasApiKey) {
-            OptionItem(
-                title = stringResource(R.string.model_not_configured),
-                description = stringResource(R.string.model_not_configured_desc),
-                selected = false,
-                enabled = onOpenConnection != null,
-                onClick = { onOpenConnection?.invoke() },
-            )
-            return@OptionSheet
-        }
-        if (favorites.isNotEmpty()) {
-            OptionGroupLabel(stringResource(R.string.model_favorites))
-            favorites.forEach { id -> ModelItem(id, id == current, favorite = true, speeds, onSelect, onToggleFavorite) }
-        }
-        OptionGroupLabel(stringResource(R.string.model_all))
-        when {
-            models.loading -> LoadingRow(stringResource(R.string.settings_loading_models), Modifier.padding(8.dp))
-            models.error != null ->
-                Text(models.error.asString(), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp))
-            else -> orderBySpeed(models.ids.filter { it !in favorites }, speeds).forEach { id ->
-                ModelItem(id, id == current, favorite = false, speeds, onSelect, onToggleFavorite)
-            }
+        ModelSheetContent(current, favorites, models, hasApiKey, onSelect, onToggleFavorite, onOpenConnection, speeds)
+    }
+}
+
+/** Itens do seletor de modelo (o sheet do app e o do cartão flutuante usam este mesmo). */
+@Composable
+fun ModelSheetContent(
+    current: String,
+    favorites: List<String>,
+    models: ModelList,
+    hasApiKey: Boolean,
+    onSelect: (String) -> Unit,
+    onToggleFavorite: (String) -> Unit,
+    onOpenConnection: (() -> Unit)?,
+    speeds: Map<String, Double?>,
+) {
+    if (!hasApiKey) {
+        OptionItem(
+            title = stringResource(R.string.model_not_configured),
+            description = stringResource(R.string.model_not_configured_desc),
+            selected = false,
+            enabled = onOpenConnection != null,
+            onClick = { onOpenConnection?.invoke() },
+        )
+        return
+    }
+    if (favorites.isNotEmpty()) {
+        OptionGroupLabel(stringResource(R.string.model_favorites))
+        favorites.forEach { id -> ModelItem(id, id == current, favorite = true, speeds, onSelect, onToggleFavorite) }
+    }
+    OptionGroupLabel(stringResource(R.string.model_all))
+    when {
+        models.loading -> LoadingRow(stringResource(R.string.settings_loading_models), Modifier.padding(8.dp))
+        models.error != null ->
+            Text(models.error.asString(), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp))
+        else -> orderBySpeed(models.ids.filter { it !in favorites }, speeds).forEach { id ->
+            ModelItem(id, id == current, favorite = false, speeds, onSelect, onToggleFavorite)
         }
     }
 }
@@ -104,12 +122,21 @@ private fun ModelItem(
         },
         selected = selected,
         onClick = { onSelect(id) },
+        compact = true,
         trailing = {
-            IconButton(onClick = { onToggleFavorite(id) }) {
+            // ★ encostada no padding da direita (o mesmo da esquerda), com área de toque pra dentro.
+            Box(
+                Modifier
+                    .padding(start = 8.dp)
+                    .size(width = 36.dp, height = 22.dp) // da altura da ★, pra não esticar o card
+                    .clickable(interactionSource = null, indication = null) { onToggleFavorite(id) },
+                contentAlignment = Alignment.CenterEnd,
+            ) {
                 Icon(
                     if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
                     contentDescription = stringResource(if (favorite) R.string.action_unfavorite else R.string.action_favorite),
                     tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
                 )
             }
         },

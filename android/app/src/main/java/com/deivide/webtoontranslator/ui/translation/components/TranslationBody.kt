@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
@@ -88,12 +89,17 @@ private fun OriginalLine(
     }
 }
 
-/** 🔊 e 🐢 lado a lado, redondos e compactos. */
+/** 🔊 e 🐢 redondos e compactos: lado a lado ou, com [stacked], um embaixo do outro (trechos). */
 @Composable
-internal fun SpeakButtons(text: String, onSpeak: (String, Boolean) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(end = 8.dp)) {
+internal fun SpeakButtons(text: String, onSpeak: (String, Boolean) -> Unit, stacked: Boolean = false) {
+    val buttons = @Composable {
         RoundButton(stringResource(R.string.speak_normal), stringResource(R.string.cd_speak)) { onSpeak(text, false) }
         RoundButton(stringResource(R.string.speak_slow), stringResource(R.string.cd_speak_slow)) { onSpeak(text, true) }
+    }
+    if (stacked) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { buttons() }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(end = 8.dp)) { buttons() }
     }
 }
 
@@ -101,14 +107,17 @@ internal fun SpeakButtons(text: String, onSpeak: (String, Boolean) -> Unit) {
 private fun RoundButton(label: String, description: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(32.dp)
+            .size(SpeakButtonSize)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
             .clickable(onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
-    ) { Text(label, fontSize = 14.sp) }
+    ) { Text(label, fontSize = 12.sp) }
 }
+
+/** Tamanho dos botões redondos de áudio (o mesmo dos botões do cartão flutuante). */
+internal val SpeakButtonSize = 28.dp
 
 /** Pronúncia escrita, com o botão que alterna entre PT-BR e IPA (a escolha fica salva). */
 @Composable

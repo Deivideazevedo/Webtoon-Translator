@@ -18,10 +18,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -40,8 +43,9 @@ import androidx.compose.ui.unit.sp
 import com.deivide.webtoontranslator.R
 
 /**
- * Bottom sheet de opções (LAYOUT.md §5.5): título centralizado em negrito, ✕ à direita, itens em
- * blocos arredondados.
+ * Bottom sheet de opções (LAYOUT.md §5.5): título discreto centralizado, ✕ arredondado à direita,
+ * itens em blocos arredondados. As janelas flutuantes desenham o mesmo padrão (FloatingSheet),
+ * com [SheetHeader], [OptionGroupLabel] e [OptionItem].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,18 +56,7 @@ fun OptionSheet(title: String, onDismiss: () -> Unit, content: @Composable Colum
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = null,
     ) {
-        Box(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp)) {
-            Text(
-                title,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp),
-            )
-            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_close))
-            }
-        }
+        SheetHeader(title, onDismiss, Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
         Column(
             Modifier
                 .heightIn(max = 560.dp)
@@ -71,9 +64,50 @@ fun OptionSheet(title: String, onDismiss: () -> Unit, content: @Composable Colum
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 16.dp)
                 .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(SheetItemSpacing),
             content = content,
         )
+    }
+}
+
+/** Espaço entre os blocos de um sheet. */
+val SheetItemSpacing = 6.dp
+
+/** Título do sheet: discreto e centralizado, ✕ arredondado à direita ([onBack]: ← à esquerda). */
+@Composable
+fun SheetHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
+    Box(modifier.fillMaxWidth()) {
+        if (onBack != null) {
+            SheetIconButton(
+                Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.action_back), onBack,
+                Modifier.align(Alignment.CenterStart),
+            )
+        }
+        Text(
+            title,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = 44.dp),
+        )
+        SheetIconButton(
+            Icons.Rounded.Close, stringResource(R.string.action_close), onClose,
+            Modifier.align(Alignment.CenterEnd),
+        )
+    }
+}
+
+@Composable
+private fun SheetIconButton(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier) {
+    Box(
+        modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, description, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -88,12 +122,14 @@ fun OptionItem(
     icon: ImageVector? = null,
     iconColor: Color = MaterialTheme.colorScheme.primary,
     enabled: Boolean = true,
+    /** Menos altura, pra caber mais itens na tela (modelos, opções do tradutor flutuante). */
+    compact: Boolean = false,
     trailing: @Composable () -> Unit = {},
 ) {
     Row(
         modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = if (compact) 44.dp else 56.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(
@@ -101,22 +137,29 @@ fun OptionItem(
                 else Modifier
             )
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(14.dp), // mesmo respiro nos quatro lados
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            IconTile(icon, iconColor, size = 36.dp)
-            Spacer(Modifier.width(14.dp))
+            IconTile(icon, iconColor, size = if (compact) 30.dp else 36.dp)
+            Spacer(Modifier.width(if (compact) 12.dp else 14.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(
                 title,
-                fontSize = 17.sp,
+                fontSize = if (compact) 16.sp else 17.sp,
+                // Compacto: linhas mais justas, a descrição fica coladinha no título.
+                lineHeight = if (compact) 20.sp else TextUnit.Unspecified,
                 fontWeight = FontWeight.Medium,
                 color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (description != null) {
-                Text(description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    description,
+                    fontSize = 13.sp,
+                    lineHeight = if (compact) 16.sp else TextUnit.Unspecified,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         trailing()

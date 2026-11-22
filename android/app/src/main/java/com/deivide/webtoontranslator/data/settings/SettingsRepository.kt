@@ -33,6 +33,15 @@ class SettingsRepository(context: Context) {
     /** Opacidade do fundo do cartão flutuante (Mais → Aparência). */
     val cardOpacity: StateFlow<Float> = _cardOpacity.asStateFlow()
 
+    private val _backClosesBubbles = MutableStateFlow(prefs.getBoolean(KEY_BACK_CLOSES, false))
+    /** Voltar fecha o cartão e as traduções da tela cheia (Mais → Aparência). */
+    val backClosesBubbles: StateFlow<Boolean> = _backClosesBubbles.asStateFlow()
+
+    fun setBackClosesBubbles(value: Boolean) {
+        prefs.edit { putBoolean(KEY_BACK_CLOSES, value) }
+        _backClosesBubbles.value = value
+    }
+
     fun setCardOpacity(value: Float) {
         prefs.edit { putFloat(KEY_CARD_OPACITY, value) }
         _cardOpacity.value = value
@@ -148,6 +157,7 @@ class SettingsRepository(context: Context) {
         _current.value = load()
         _favorites.value = favoritesOf(_current.value.provider)
         _cardOpacity.value = prefs.getFloat(KEY_CARD_OPACITY, DEFAULT_CARD_OPACITY)
+        _backClosesBubbles.value = prefs.getBoolean(KEY_BACK_CLOSES, false)
     }
 
     /** Tom da voz (1.0 = normal). */
@@ -211,6 +221,7 @@ class SettingsRepository(context: Context) {
         const val DEFAULT_CARD_OPACITY = 0.92f
         val CARD_OPACITY_RANGE = 0.5f..1f
         private const val KEY_CARD_OPACITY = "card_opacity"
+        private const val KEY_BACK_CLOSES = "back_closes_bubbles"
         private const val KEY_DESKTOP_EXTRAS = "desktop_extras"
         private const val KEY_BENCHMARK = "benchmark"
         val PITCH_RANGE = 0.5f..1.5f

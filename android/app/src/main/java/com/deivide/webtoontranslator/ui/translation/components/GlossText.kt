@@ -2,6 +2,8 @@ package com.deivide.webtoontranslator.ui.translation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -11,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -23,7 +26,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
@@ -82,8 +87,11 @@ fun segmentGloss(original: String, aligned: List<GlossSpan>, segment: String): L
     }.toList()
 }
 
-/** Etiqueta aberta: de qual texto ([owner]), qual palavra e onde ela está (coordenadas da raiz). */
-private data class Tip(val owner: Any, val span: GlossSpan, val word: Rect)
+/**
+ * Etiqueta aberta: de qual texto ([owner]), qual palavra, onde ela está e a área do texto dono
+ * (coordenadas da raiz).
+ */
+private data class Tip(val owner: Any, val span: GlossSpan, val word: Rect, val area: Rect)
 
 /** Uma etiqueta por cartão: abrir numa palavra fecha a que estava aberta em outra. */
 private class GlossTips {
@@ -95,6 +103,7 @@ private val LocalGlossTips = staticCompositionLocalOf<GlossTips?> { null }
 /**
  * Camada das etiquetas de tradução das palavras: desenha a etiqueta POR CIMA de todo o conteúdo
  * (senão a linha de baixo, desenhada depois, passa por cima dela). Envolve o cartão inteiro.
+ * Tocar em qualquer lugar fora do texto da etiqueta aberta a fecha (o toque segue normal).
  */
 @Composable
 fun GlossTooltipHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -102,7 +111,18 @@ fun GlossTooltipHost(modifier: Modifier = Modifier, content: @Composable () -> U
     var origin by remember { mutableStateOf(Offset.Zero) }
     var tipHeight by remember { mutableIntStateOf(0) }
     val gap = with(LocalDensity.current) { 4.dp.toPx() }
-    Box(modifier.onGloballyPositioned { origin = it.positionInRoot() }) {
+    Box(
+        modifier
+            .onGloballyPositioned { origin = it.positionInRoot() }
+            .pointerInput(tips) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val open = tips.open ?: return@awaitEachGesture
+                    // No texto dono, quem decide é ele (fechar ou trocar de palavra).
+                    if (!open.area.contains(down.position + origin)) tips.open = null
+                }
+            }
+    ) {
         CompositionLocalProvider(LocalGlossTips provides tips) { content() }
         val tip = tips.open ?: return@Box
         val word = tip.word.translate(-origin)
@@ -141,7 +161,10 @@ fun GlossText(
     val owner = remember { Any() }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     var origin by remember { mutableStateOf(Offset.Zero) }
+    var area by remember { mutableStateOf(Rect.Zero) }
     val selected = tips?.open?.takeIf { it.owner === owner }?.span
+    // Texto que sai da tela (ex.: trocou de aba) leva a etiqueta junto.
+    DisposableEffect(tips) { onDispose { if (tips?.open?.owner === owner) tips.open = null } }
     val dots = MaterialTheme.colorScheme.onSurfaceVariant
     val accent = MaterialTheme.colorScheme.primary
 
@@ -151,7 +174,10 @@ fun GlossText(
         fontSize = fontSize,
         onTextLayout = { layout = it },
         modifier = modifier
-            .onGloballyPositioned { origin = it.positionInRoot() }
+            .onGloballyPositioned {
+                origin = it.positionInRoot()
+                area = it.boundsInRoot()
+            }
             .drawBehind {
                 val l = layout ?: return@drawBehind
                 val dash = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 3.dp.toPx()))
@@ -172,7 +198,7 @@ fun GlossText(
                     val offset = l.getOffsetForPosition(pos)
                     val hit = spans.firstOrNull { offset in it.start until it.end }
                     val opening = hit != null && hit != selected
-                    tips?.open = if (opening) Tip(owner, hit!!, l.lineRects(hit).first().translate(origin)) else null
+                    tips?.open = if (opening) Tip(owner, hit!!, l.lineRects(hit).first().translate(origin), area) else null
                     if (opening) onSpeakWord?.invoke(text.substring(hit!!.start, hit.end))
                 }
             },

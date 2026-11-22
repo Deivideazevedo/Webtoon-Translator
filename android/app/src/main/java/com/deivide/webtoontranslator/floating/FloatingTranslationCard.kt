@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CropFree
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,6 +40,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -70,18 +72,19 @@ import com.deivide.webtoontranslator.ui.translation.components.GlossSpan
 import com.deivide.webtoontranslator.ui.translation.components.GlossText
 import com.deivide.webtoontranslator.ui.translation.components.GlossTooltipHost
 import com.deivide.webtoontranslator.ui.translation.components.LearnSection
+import com.deivide.webtoontranslator.ui.translation.components.SpeakButtonSize
 import com.deivide.webtoontranslator.ui.translation.components.alignGloss
 import kotlin.math.abs
 import kotlinx.coroutines.flow.StateFlow
 
 // Cartão flutuante (LAYOUT.md §5.6): sempre escuro e translúcido, por cima de qualquer app.
 private val CardBackground = Color(0xFF1E1E1E)
-private val ButtonBackground = Color.White.copy(alpha = 0.12f)
+internal val FloatingButtonBackground = Color.White.copy(alpha = 0.12f)
 private val Accent = Color(0xFF6EA8FE)
 private val TextPrimary = Color(0xFFF2F2F2)
 private val TextSecondary = Color(0xFFB8BEC8)
 
-private val FloatingColors = darkColorScheme(
+internal val FloatingColors = darkColorScheme(
     primary = Accent,
     surface = CardBackground,
     onSurface = TextPrimary,
@@ -96,6 +99,10 @@ internal class FloatingCardControls(
     val onDrag: (dx: Float, dy: Float) -> Unit,
     /** ⌗ redefinir a área (só no modo região fixa). */
     val onReselect: (() -> Unit)?,
+    /** ⚙ opções (modo, voltar fecha, velocidade da voz). */
+    val onOptions: () -> Unit,
+    /** Toque no rodapé do modelo: escolher outro modelo (e já retraduzir). */
+    val onPickModel: () -> Unit,
 )
 
 @Composable
@@ -106,8 +113,11 @@ internal fun FloatingTranslationCard(
     actions: TranslationCardActions,
     controls: FloatingCardControls,
     opacity: StateFlow<Float>,
+    backCloses: StateFlow<Boolean>,
 ) {
     val alpha by opacity.collectAsStateWithLifecycle()
+    // "Voltar fecha as traduções": o ✕ sai (o ⌗, se houver, fica no lugar dele).
+    val noClose by backCloses.collectAsStateWithLifecycle()
     val state by card.collectAsStateWithLifecycle()
     val lib by library.collectAsStateWithLifecycle()
     val opts by options.collectAsStateWithLifecycle()
@@ -129,9 +139,10 @@ internal fun FloatingTranslationCard(
             ) {
                 GlossTooltipHost {
                     Column {
-                        Header(current, translation, translation != null && translation.id in lib.favoriteIds, opts, actions, controls)
-                        Column(Modifier.verticalScroll(scroll).padding(horizontal = 4.dp)) {
-                            Body(current, opts, actions)
+                        Header(current, translation, translation != null && translation.id in lib.favoriteIds, opts, actions, controls, noClose)
+                        // A coluna 🔊/🐢 fica na mesma linha vertical do ⚙.
+                        Column(Modifier.verticalScroll(scroll)) {
+                            Body(current, opts, actions, controls)
                         }
                     }
                 }
@@ -170,8 +181,8 @@ private fun Modifier.dragAnywhere(scroll: ScrollState, onDrag: (Float, Float) ->
     }
 }
 
-/** O cabeçalho (fileira de botões) ocupa mais ou menos os primeiros 56 dp do cartão. */
-private fun PointerInputScope.isInHeader(y: Float) = y < 56.dp.toPx()
+/** O cabeçalho (fileira de botões) ocupa mais ou menos os primeiros 44 dp do cartão. */
+private fun PointerInputScope.isInHeader(y: Float) = y < 44.dp.toPx()
 
 @Composable
 private fun Header(
@@ -181,6 +192,7 @@ private fun Header(
     options: ReadingOptions,
     actions: TranslationCardActions,
     controls: FloatingCardControls,
+    noClose: Boolean,
 ) {
     val context = LocalContext.current
     val original = when (state) {
@@ -188,49 +200,57 @@ private fun Header(
         is TranslationCardState.Streaming -> state.original
         else -> ""
     }
+    // 🔊/🐢 ficam à esquerda do texto, embaixo do ⚙ (ver [TextBlock]).
     Row(
         Modifier.fillMaxWidth().padding(bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (original.isNotBlank()) {
-            CircleAction(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.cd_speak)) { actions.onSpeak(original, false) }
-            CircleAction(label = "🐢", description = stringResource(R.string.cd_speak_slow)) { actions.onSpeak(original, true) }
-        }
-        if (translation != null) {
-            CircleAction(Icons.Filled.ContentCopy, stringResource(R.string.action_copy)) {
+        // Todos os botões aparecem desde o início (o topo não "pula" quando a tradução termina);
+        // os que precisam dela pronta ficam apagados até lá.
+        val ready = translation != null
+        CircleAction(Icons.Filled.Settings, stringResource(R.string.cd_options), onClick = controls.onOptions)
+        CircleAction(Icons.Filled.ContentCopy, stringResource(R.string.action_copy), enabled = ready) {
+            translation?.let {
                 context.getSystemService(ClipboardManager::class.java).setPrimaryClip(
-                    ClipData.newPlainText("tradução", "${translation.originalText}\n${translation.translation}")
+                    ClipData.newPlainText("tradução", "${it.originalText}\n${it.translation}")
                 )
             }
-            CircleAction(
-                if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                stringResource(if (isFavorite) R.string.action_unfavorite else R.string.action_favorite),
-                active = isFavorite,
-            ) { actions.onToggleFavorite(translation) }
         }
+        CircleAction(
+            if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+            stringResource(if (isFavorite) R.string.action_unfavorite else R.string.action_favorite),
+            active = isFavorite,
+            enabled = ready,
+        ) { translation?.let(actions.onToggleFavorite) }
         if (original.isNotBlank() && options.ipaEnabled) {
             CircleAction(label = "IPA", description = stringResource(R.string.cd_toggle_ipa), active = options.showIpa) {
                 actions.onOptionsChange { it.copy(showIpa = !it.showIpa) }
             }
         }
-        if (translation != null) {
-            CircleAction(
-                Icons.AutoMirrored.Filled.MenuBook,
-                stringResource(R.string.cd_learn),
-                active = options.learnOpen,
-            ) { actions.onOptionsChange { it.copy(learnOpen = !it.learnOpen) } }
-        }
+        CircleAction(
+            Icons.AutoMirrored.Filled.MenuBook,
+            stringResource(R.string.cd_learn),
+            active = options.learnOpen,
+            enabled = ready,
+        ) { actions.onOptionsChange { it.copy(learnOpen = !it.learnOpen) } }
         Spacer(Modifier.weight(1f))
         controls.onReselect?.let { reselect ->
             CircleAction(Icons.Filled.CropFree, stringResource(R.string.cd_reselect), onClick = reselect)
         }
-        actions.onClose?.let { CircleAction(Icons.Filled.Close, stringResource(R.string.action_close), onClick = it) }
+        if (!noClose) {
+            actions.onClose?.let { CircleAction(Icons.Filled.Close, stringResource(R.string.action_close), onClick = it) }
+        }
     }
 }
 
 @Composable
-private fun Body(state: TranslationCardState, options: ReadingOptions, actions: TranslationCardActions) {
+private fun Body(
+    state: TranslationCardState,
+    options: ReadingOptions,
+    actions: TranslationCardActions,
+    controls: FloatingCardControls,
+) {
     when (state) {
         TranslationCardState.Reading -> Loading(stringResource(R.string.result_reading))
         is TranslationCardState.Failed -> {
@@ -242,45 +262,80 @@ private fun Body(state: TranslationCardState, options: ReadingOptions, actions: 
                 }
             }
         }
-        is TranslationCardState.Streaming -> {
+        is TranslationCardState.Streaming -> TextBlock(
+            state.original, emptyList(), state.pronunciationPt, state.pronunciationIpa, options, actions,
+        ) {
             if (state.translation.isBlank()) Loading(stringResource(R.string.result_translating))
             else Text(state.translation, fontSize = 18.sp, color = TextPrimary)
-            Original(state.original, emptyList(), state.pronunciationPt, state.pronunciationIpa, options, actions)
         }
         is TranslationCardState.Done -> {
             val t = state.translation
-            Text(t.translation, fontSize = 18.sp, color = TextPrimary)
-            Original(t.originalText, alignGloss(t.originalText, t.gloss), t.pronunciationPt, t.pronunciationIpa, options, actions)
+            TextBlock(
+                t.originalText, alignGloss(t.originalText, t.gloss), t.pronunciationPt, t.pronunciationIpa, options, actions,
+            ) {
+                Text(t.translation, fontSize = 18.sp, color = TextPrimary)
+            }
             if (options.learnOpen) LearnSection(t, options.copy(learnOpen = true), actions, showToggle = false)
-            Text(
-                stringResource(R.string.result_footer, t.model, t.durationSecs),
-                color = MaterialTheme.colorScheme.outline,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+            ModelFooter(stringResource(R.string.result_footer, t.model, t.durationSecs), controls.onPickModel)
         }
     }
 }
 
+/**
+ * 🔊/🐢 numa coluna estreita à esquerda, logo abaixo do ⚙ e na mesma linha vertical dele; tradução,
+ * inglês e pronúncia à direita dela (o mesmo padrão dos trechos).
+ */
 @Composable
-private fun Original(
+private fun TextBlock(
     text: String,
     gloss: List<GlossSpan>,
     pt: String,
     ipa: String,
     options: ReadingOptions,
     actions: TranslationCardActions,
+    translation: @Composable () -> Unit,
 ) {
-    if (text.isBlank()) return
-    GlossText(
-        text, gloss,
-        color = TextPrimary.copy(alpha = 0.85f),
-        modifier = Modifier.padding(top = 6.dp),
-        onSpeakWord = { actions.onSpeak(it, false) },
-    )
-    val pronunciation = if (options.ipaEnabled && options.showIpa && ipa.isNotBlank()) ipa else pt
-    if (pronunciation.isNotBlank()) {
-        Text(stringResource(R.string.pronunciation, pronunciation), fontSize = 13.sp, color = TextSecondary)
+    if (text.isBlank()) return translation()
+    Row {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            CircleAction(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.cd_speak)) { actions.onSpeak(text, false) }
+            CircleAction(label = "🐢", description = stringResource(R.string.cd_speak_slow)) { actions.onSpeak(text, true) }
+        }
+        Column(Modifier.weight(1f).padding(start = 10.dp)) {
+            translation()
+            GlossText(
+                text, gloss,
+                color = TextPrimary.copy(alpha = 0.85f),
+                modifier = Modifier.padding(top = 6.dp),
+                onSpeakWord = { actions.onSpeak(it, false) },
+            )
+            val pronunciation = if (options.ipaEnabled && options.showIpa && ipa.isNotBlank()) ipa else pt
+            if (pronunciation.isNotBlank()) {
+                Text(stringResource(R.string.pronunciation, pronunciation), fontSize = 13.sp, color = TextSecondary)
+            }
+        }
+    }
+}
+
+/** Rodapé "modelo · tempo ▾": toque abre a escolha de modelo (que já retraduz). */
+@Composable
+private fun ModelFooter(text: String, onClick: () -> Unit) {
+    val description = stringResource(R.string.cd_change_model)
+    Row(
+        Modifier
+            .padding(top = 8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(FloatingButtonBackground)
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = description
+                role = Role.Button
+            }
+            .padding(horizontal = 10.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, color = TextSecondary, fontSize = 12.sp)
+        Text(" ▾", color = TextSecondary, fontSize = 12.sp)
     }
 }
 
@@ -292,21 +347,23 @@ private fun Loading(label: String) {
     }
 }
 
-/** Botão redondo do cabeçalho: todos do mesmo tamanho; ligado = azul. */
+/** Botão redondo do cabeçalho: todos do mesmo tamanho; ligado = azul; sem [enabled], apagado. */
 @Composable
 private fun CircleAction(
     icon: ImageVector? = null,
     description: String,
     label: String? = null,
     active: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Box(
         Modifier
-            .size(36.dp)
+            .size(SpeakButtonSize)
+            .alpha(if (enabled) 1f else 0.35f)
             .clip(CircleShape)
-            .background(if (active) Accent.copy(alpha = 0.3f) else ButtonBackground)
-            .clickable(onClick = onClick)
+            .background(if (active) Accent.copy(alpha = 0.3f) else FloatingButtonBackground)
+            .clickable(enabled = enabled, onClick = onClick)
             .semantics {
                 contentDescription = description
                 role = Role.Button
@@ -315,9 +372,9 @@ private fun CircleAction(
     ) {
         val tint = if (active) Accent else TextPrimary
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(19.dp))
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
         } else {
-            Text(label.orEmpty(), color = tint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(label.orEmpty(), color = tint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
