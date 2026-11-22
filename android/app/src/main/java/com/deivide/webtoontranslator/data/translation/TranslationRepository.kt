@@ -3,6 +3,7 @@ package com.deivide.webtoontranslator.data.translation
 import android.graphics.Bitmap
 import com.deivide.webtoontranslator.data.engine.EngineProvider
 import com.deivide.webtoontranslator.data.settings.AppSettings
+import com.deivide.webtoontranslator.domain.model.BenchmarkResult
 import com.deivide.webtoontranslator.domain.model.ScreenBlock
 import com.deivide.webtoontranslator.domain.model.TranslationEvent
 import java.nio.ByteBuffer
@@ -10,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
+import uniffi.webtoon_android.BenchmarkListener
 import uniffi.webtoon_android.TranslateListener
 import uniffi.webtoon_android.TranslateRequest
 
@@ -55,6 +57,19 @@ class TranslationRepository(private val engines: EngineProvider) {
         }
         val request = TranslateRequest(settings.provider.id, settings.baseUrl, settings.apiKey, settings.model, text)
         send(TranslationEvent.Done(engine.translate(request, listener).toDomain()))
+    }
+
+    /** Tempo (s) de uma tradução de teste com o prompt real, no modelo configurado. */
+    suspend fun testSpeed(settings: AppSettings): Double =
+        engines.get().testSpeed(settings.provider.id, settings.baseUrl, settings.apiKey, settings.model)
+
+    /** Mede todos os [models] (mesmo benchmark do desktop); do mais rápido pro mais lento. */
+    suspend fun benchmark(settings: AppSettings, models: List<String>, onProgress: (done: Int, total: Int) -> Unit): List<BenchmarkResult> {
+        val listener = object : BenchmarkListener {
+            override fun onProgress(done: UInt, total: UInt) = onProgress(done.toInt(), total.toInt())
+        }
+        return engines.get().benchmark(settings.provider.id, settings.baseUrl, settings.apiKey, models, listener)
+            .map { BenchmarkResult(it.model, it.secs, it.error, it.favorite) }
     }
 
     suspend fun listModels(settings: AppSettings): List<String> =

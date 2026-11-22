@@ -37,6 +37,9 @@ sealed interface TranslationEvent {
     data class Done(val translation: Translation) : TranslationEvent
 }
 
+/** Resultado de um modelo no benchmark: mediana em segundos (null = falhou). */
+data class BenchmarkResult(val model: String, val secs: Double?, val error: String?, val favorite: Boolean)
+
 /** Balão encontrado na tela (modo tela cheia): texto, caixa em pixels da tela e tradução curta. */
 data class ScreenBlock(
     val text: String,

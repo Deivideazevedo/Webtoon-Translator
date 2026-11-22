@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use webtoon_core::benchmark;
 use webtoon_core::library::{self, Library, List};
 use webtoon_core::ocr::{self, OcrEngine};
 use webtoon_core::pronunciation;
@@ -138,6 +139,23 @@ impl From<Translation> for TranslationResult {
     }
 }
 
+/// Resultado de um modelo no benchmark (igual ao do desktop).
+#[derive(uniffi::Record)]
+pub struct BenchmarkEntry {
+    pub model: String,
+    /// Mediana dos tempos em segundos; None se falhou.
+    pub secs: Option<f64>,
+    pub error: Option<String>,
+    /// Entrou nos mais rápidos e confiáveis (sugestão de favorito).
+    pub favorite: bool,
+}
+
+/// Andamento do benchmark, chamado fora da thread de UI.
+#[uniffi::export(with_foreign)]
+pub trait BenchmarkListener: Send + Sync {
+    fn on_progress(&self, done: u32, total: u32);
+}
+
 /// Avisos do streaming, chamados fora da thread de UI.
 #[uniffi::export(with_foreign)]
 pub trait TranslateListener: Send + Sync {
@@ -237,6 +255,30 @@ impl Engine {
         result.model = request.model;
         result.duration_secs = started.elapsed().as_secs_f64();
         Ok(result.into())
+    }
+
+    /// Tempo (segundos) de uma tradução de teste com o prompt real.
+    pub async fn test_speed(&self, provider: String, base_url: String, api_key: String, model: String) -> Result<f64, BridgeError> {
+        Ok(translate::timed_translation(&provider, &base_url, &api_key, &model).await?)
+    }
+
+    /// Mede todos os `models` (core::benchmark, o mesmo do desktop); do mais rápido pro mais lento.
+    pub async fn benchmark(
+        &self,
+        provider: String,
+        base_url: String,
+        api_key: String,
+        models: Vec<String>,
+        listener: Arc<dyn BenchmarkListener>,
+    ) -> Result<Vec<BenchmarkEntry>, BridgeError> {
+        let entries = benchmark::run(&provider, &base_url, &api_key, &models, &|p: benchmark::Progress| {
+            listener.on_progress(p.done as u32, p.total as u32)
+        })
+        .await?;
+        Ok(entries
+            .into_iter()
+            .map(|e| BenchmarkEntry { model: e.model, secs: e.secs, error: e.error, favorite: e.favorite })
+            .collect())
     }
 
     /// IDs dos modelos disponíveis pra essa chave.

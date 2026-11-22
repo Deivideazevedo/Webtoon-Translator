@@ -35,6 +35,11 @@ class ErrorLog(context: Context) {
         }
     }.getOrDefault(emptyList())
 
+    @Synchronized
+    fun clear() {
+        file.delete()
+    }
+
     private companion object {
         const val MAX_ENTRIES = 50
     }

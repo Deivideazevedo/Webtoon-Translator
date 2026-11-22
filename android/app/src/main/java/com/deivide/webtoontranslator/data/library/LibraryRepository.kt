@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import uniffi.webtoon_android.ImportSummary
 import uniffi.webtoon_android.TranslationLibrary
 
 /** As duas listas de traduções salvas. */
@@ -23,7 +24,7 @@ data class Library(
     val favorites: List<Translation> = emptyList(),
     val recentBytes: Long = 0,
     val favoritesBytes: Long = 0,
-    val recentMax: Int = 20,
+    val recentMax: Int = 100,
 ) {
     val favoriteIds: Set<String> = favorites.mapTo(HashSet()) { it.id }
 
@@ -57,6 +58,17 @@ class LibraryRepository(context: Context) {
         change { native.setFavorite(translation.toBridge(), favorite) }
 
     suspend fun delete(list: SavedList, ids: Collection<String>) = change { native.delete(list.id, ids.toList()) }
+
+    /** Backup completo (mesmo formato do desktop); as configurações e chaves vêm de quem chama. */
+    suspend fun exportBackup(settingsJson: String, apiKeys: Map<String, String>): String =
+        withContext(Dispatchers.IO) { native.exportBackup(settingsJson, apiKeys) }
+
+    /** Soma as traduções do backup às daqui e devolve o resto (configurações, chaves, contagens). */
+    suspend fun importBackup(json: String): ImportSummary {
+        val summary = withContext(Dispatchers.IO) { native.importBackup(json) }
+        refresh()
+        return summary
+    }
 
     private suspend fun change(action: () -> Unit) {
         withContext(Dispatchers.IO) { action() }

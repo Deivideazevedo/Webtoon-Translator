@@ -86,7 +86,7 @@ private fun SegmentItem(
     actions: TranslationCardActions,
 ) {
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        GlossText(segment.text, gloss, fontSize = 15.sp)
+        GlossText(segment.text, gloss, fontSize = 15.sp, onSpeakWord = { actions.onSpeak(it, false) })
         Text(segment.meaning, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
             SpeakButtons(segment.text, actions.onSpeak)

@@ -33,11 +33,11 @@ resto: as próximas telas já nascem no padrão novo.
 | L3 | **Navegação inferior: Inicial \| Traduções \| Mais** | ✅ |
 | L4 | **Inicial**: cartão com botão grande + pílula de status + seletores **Modelo de IA** e **Modo de tradução** (bottom sheets); última tradução; personalizar ícone | 🟨 (cartão de controle, seletores de modelo ★ e de modo, última tradução; falta "personalizar ícone") |
 | L5 | **Traduções**: traduzir texto digitado/colado (absorve o item 37) + Recentes/Favoritos | 🟨 (Recentes/Favoritos em pílula; falta digitar/colar frase) |
-| L6 | **Mais**: Conexão, Voz, Aparência, Acesso rápido · Dados (Backup, Armazenamento) · Suporte (Tutorial, App fechando sozinho, Sobre e licenças) | 🟨 (Conexão no visual novo com o seletor de modelo, Voz com velocidade e exemplo, Aparência; falta o resto) |
-| L7 | **Voz**: voz do Android (escolher entre as instaladas), **tom** e velocidade, ouvir exemplo — tudo nativo, sem gerar áudio | ⬜ |
+| L6 | **Mais**: Conexão, Voz, Aparência, Acesso rápido · Dados (Backup, Armazenamento) · Suporte (Tutorial, App fechando sozinho, Sobre e licenças) | ✅ |
+| L7 | **Voz**: voz do Android (escolher entre as instaladas), **tom** e velocidade, ouvir exemplo — tudo nativo, sem gerar áudio | ✅ (voz instalada, tom, velocidade, ouvir exemplo) |
 | L8 | Cartão de tradução e ícone flutuante seguindo o tema e o padrão de botões redondos | ⬜ |
-| L9 | **Opção "Pronúncia em IPA"** (em Mais → Aparência ou Voz): desligada por padrão; ligada, mostra o botão IPA no cartão pra alternar PT-BR ⇄ IPA | ⬜ |
-| L10 | **Erros recentes** (em Mais → Suporte): lista das últimas falhas (API, OCR) com data e detalhe técnico, pra investigar quando uma tradução falha. O registro já é gravado (`ErrorLog`); falta a tela | ⬜ |
+| L9 | **Opção "Pronúncia em IPA"** (em Mais → Aparência ou Voz): desligada por padrão; ligada, mostra o botão IPA no cartão pra alternar PT-BR ⇄ IPA | ✅ (Mais → Aparência) |
+| L10 | **Erros recentes** (em Mais → Suporte): lista das últimas falhas (API, OCR) com data e detalhe técnico, pra investigar quando uma tradução falha. O registro já é gravado (`ErrorLog`); falta a tela | ✅ (Mais → Erros recentes; tocar copia o detalhe) |
 
 ### Prioridade 1 — base do app (paridade com o desktop)
 
@@ -47,7 +47,7 @@ resto: as próximas telas já nascem no padrão novo.
 |---|---|---|
 | 1 | **Botão grande Iniciar/Parar** o tradutor flutuante, com o estado escrito embaixo 💡 | ✅ |
 | 2 | **Seletor de modelo** na tela inicial, com ★ favoritos no topo | ✅ |
-| 3 | **Recentes (até 20) / Favoritos** (sem limite, mostrando o espaço ocupado por texto + áudio); ★ em cada cartão; o cartão ativo fica destacado | ✅ |
+| 3 | **Recentes (até 100) / Favoritos** (sem limite, mostrando o espaço ocupado por texto + áudio); ★ em cada cartão; o cartão ativo fica destacado | ✅ |
 | 4 | **Excluir em lote**: segurar o dedo num cartão entra no modo de seleção (caixas de marcar + "Excluir (n)") | ✅ |
 | 5 | Tocar num cartão do histórico **abre a tradução completa** de novo | ✅ |
 
@@ -57,14 +57,14 @@ resto: as próximas telas já nascem no padrão novo.
 |---|---|---|
 | 6 | Provedor (Google, Anthropic, compatível OpenAI), URL do gateway e chave de API cifrada | ✅ |
 | 7 | Modelo com lista dos modelos da chave e **★ favoritos** | ✅ (★ no seletor de modelo da tela Inicial) |
-| 8 | **⏱ Testar velocidade** do modelo escolhido | ⬜ |
-| 9 | **🏁 Rodar benchmark**: mede todos os modelos e marca os 5 mais rápidos como favoritos (mover a lógica do desktop pro `core/` pra os dois usarem) | ⬜ |
+| 8 | **⏱ Testar velocidade** do modelo escolhido | ✅ (Conexão) |
+| 9 | **🏁 Rodar benchmark**: mede todos os modelos e marca os 5 mais rápidos como favoritos (mover a lógica do desktop pro `core/` pra os dois usarem) | ✅ (Conexão; lógica movida pro core, o desktop usa a mesma) |
 
 **Configurações → Voz**
 
 | # | Item | Status |
 |---|---|---|
-| 10 | **Voz do Android** como padrão (escolher entre as vozes em inglês instaladas, **tom** e velocidade — ver L7) | 🟨 (já fala, falta escolher a voz) |
+| 10 | **Voz do Android** como padrão (escolher entre as vozes em inglês instaladas, **tom** e velocidade — ver L7) | ✅ |
 | 11 | **Velocidade da fala** (padrão 0,70x, dica e "↺ Voltar ao padrão") | ✅ |
 | 12 | **🐢 lento** fixo em 0,5x, independente da velocidade configurada | ✅ |
 | 13 | **▶ Ouvir exemplo** da voz escolhida | ✅ (Mais → Voz → Ouvir exemplo) |
@@ -74,8 +74,8 @@ resto: as próximas telas já nascem no padrão novo.
 
 | # | Item | Status |
 |---|---|---|
-| 15 | **Opacidade do cartão flutuante** (translucidez, igual à do balão do desktop) | ⬜ |
-| 16 | **Backup: exportar / importar** (configurações, chaves, favoritos de modelo, traduções) no **mesmo formato do desktop**: exporta no PC e importa no celular, e vice-versa | 🟨 (núcleo pronto e compartilhado com o desktop; falta a tela) |
+| 15 | **Opacidade do cartão flutuante** (translucidez, igual à do balão do desktop) | ✅ (Mais → Aparência, com prévia) |
+| 16 | **Backup: exportar / importar** (configurações, chaves, favoritos de modelo, traduções) no **mesmo formato do desktop**: exporta no PC e importa no celular, e vice-versa | ✅ (Mais → Backup; mesmo arquivo do desktop, guarda os campos só do desktop) |
 
 **Cartão de tradução (o "balão" do celular)**
 
@@ -98,13 +98,13 @@ resto: as próximas telas já nascem no padrão novo.
 
 | # | Item | Status |
 |---|---|---|
-| 24 | Ícone flutuante arrastável que **gruda na borda** (semitransparente quando parado) e volta pro canto ao trocar de app 💡 | 🟨 (fica onde foi solto; volta pra borda com folga ao tocar fora e fica transparente; falta voltar ao trocar de app) |
+| 24 | Ícone flutuante arrastável que **gruda na borda** (semitransparente quando parado) e volta pro canto ao trocar de app 💡 | 🟨 (fica onde foi solto; volta encostado na borda ao tocar fora ou rolar e fica transparente; falta voltar ao trocar de app) |
 | 25 | **Modo região**: tocar no ícone arma a seleção; arrastar o ícone desenha o retângulo a partir daquele ponto; soltar traduz. Fora disso, arrastar só move o ícone e a página embaixo continua rolando 💡 | ✅ |
 | 26 | **Toque longo** (ou tocar de novo sem arrastar) abre o menu de baixo: modo, modelo, abrir o app, parar 💡 | 🟨 (modo, abrir o app e parar; falta escolher o modelo) |
 | 27 | **Cartão de tradução perto da área selecionada**, com o conteúdo do balão do desktop (PT/IPA, 🔊, 🐢, Aprender, Copiar, ★) | ✅ |
 | 28 | **Tocar numa palavra** mostra o significado (a glosa; no celular não existe hover) 💡 | ✅ (pontilhado nas palavras do original e dos trechos; tocar mostra a tradução) |
 | 29 | Desligar pelo **"Parar" na notificação** e arrastando o ícone até um ✕ embaixo da tela | 🟨 ("Parar" na notificação e no menu; falta arrastar até o ✕) |
-| 30 | Tela de ajuda pro **"app fechando sozinho"** (otimização de bateria da Samsung/Xiaomi) 💡 | ⬜ |
+| 30 | Tela de ajuda pro **"app fechando sozinho"** (otimização de bateria da Samsung/Xiaomi) 💡 | ✅ (Mais → App fechando sozinho) |
 
 Regra de captura: **esconder tudo que é nosso** (ícone, cartão, retângulo) antes de capturar a tela e
 cortar a barra de status. O Translate On Screen não faz isso e traduz o próprio aviso e o próprio cartão.
@@ -136,6 +136,9 @@ cortar a barra de status. O Translate On Screen não faz isso e traduz o própri
 ---
 
 ## Desktop
+
+> Plano (21/11/2026): depois que o Android estiver completo, replicar no desktop o mesmo layout,
+> funcionalidades e regras do Android (abas, cartões, seletores, modos, backup etc.).
 
 | # | Item | Status |
 |---|---|---|

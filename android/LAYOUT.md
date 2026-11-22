@@ -158,7 +158,7 @@ Junta o que hoje está espalhado: traduzir texto digitado e o histórico.
 │ │ Digite ou cole uma frase     │ │
 │ │                  ( Traduzir )│ │  ← pílula azul
 │ └──────────────────────────────┘ │
-│ ( Recentes 12/20 ) ( Favoritos 3 )  ← abas em pílula
+│ ( Recentes 12/100 ) ( Favoritos 3 )  ← abas em pílula
 │ ┌──────────────────────────────┐ │
 │ │ Among the heroes of…       ★ │ │  ← mesmo cartão de hoje: toque abre,
 │ │ Entre os heróis daquele…     │ │     segurar entra no modo de seleção

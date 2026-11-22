@@ -174,6 +174,7 @@ fun HomeScreen(
             favorites = state.favoriteModels,
             models = state.models,
             hasApiKey = !state.settings?.apiKey.isNullOrBlank(),
+            speeds = state.speeds,
             onLoad = viewModel::loadModels,
             onSelect = {
                 viewModel.selectModel(it)

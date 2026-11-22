@@ -80,7 +80,6 @@ private val ButtonBackground = Color.White.copy(alpha = 0.12f)
 private val Accent = Color(0xFF6EA8FE)
 private val TextPrimary = Color(0xFFF2F2F2)
 private val TextSecondary = Color(0xFFB8BEC8)
-private const val CARD_ALPHA = 0.92f
 
 private val FloatingColors = darkColorScheme(
     primary = Accent,
@@ -106,7 +105,9 @@ internal fun FloatingTranslationCard(
     options: StateFlow<ReadingOptions>,
     actions: TranslationCardActions,
     controls: FloatingCardControls,
+    opacity: StateFlow<Float>,
 ) {
+    val alpha by opacity.collectAsStateWithLifecycle()
     val state by card.collectAsStateWithLifecycle()
     val lib by library.collectAsStateWithLifecycle()
     val opts by options.collectAsStateWithLifecycle()
@@ -121,7 +122,7 @@ internal fun FloatingTranslationCard(
                 Modifier
                     .padding(horizontal = 8.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(CardBackground.copy(alpha = CARD_ALPHA))
+                    .background(CardBackground.copy(alpha = alpha))
                     .dragAnywhere(scroll, controls.onDrag)
                     .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.5f)
                     .padding(10.dp)
@@ -244,12 +245,12 @@ private fun Body(state: TranslationCardState, options: ReadingOptions, actions: 
         is TranslationCardState.Streaming -> {
             if (state.translation.isBlank()) Loading(stringResource(R.string.result_translating))
             else Text(state.translation, fontSize = 18.sp, color = TextPrimary)
-            Original(state.original, emptyList(), state.pronunciationPt, state.pronunciationIpa, options)
+            Original(state.original, emptyList(), state.pronunciationPt, state.pronunciationIpa, options, actions)
         }
         is TranslationCardState.Done -> {
             val t = state.translation
             Text(t.translation, fontSize = 18.sp, color = TextPrimary)
-            Original(t.originalText, alignGloss(t.originalText, t.gloss), t.pronunciationPt, t.pronunciationIpa, options)
+            Original(t.originalText, alignGloss(t.originalText, t.gloss), t.pronunciationPt, t.pronunciationIpa, options, actions)
             if (options.learnOpen) LearnSection(t, options.copy(learnOpen = true), actions, showToggle = false)
             Text(
                 stringResource(R.string.result_footer, t.model, t.durationSecs),
@@ -262,9 +263,21 @@ private fun Body(state: TranslationCardState, options: ReadingOptions, actions: 
 }
 
 @Composable
-private fun Original(text: String, gloss: List<GlossSpan>, pt: String, ipa: String, options: ReadingOptions) {
+private fun Original(
+    text: String,
+    gloss: List<GlossSpan>,
+    pt: String,
+    ipa: String,
+    options: ReadingOptions,
+    actions: TranslationCardActions,
+) {
     if (text.isBlank()) return
-    GlossText(text, gloss, color = TextPrimary.copy(alpha = 0.85f), modifier = Modifier.padding(top = 6.dp))
+    GlossText(
+        text, gloss,
+        color = TextPrimary.copy(alpha = 0.85f),
+        modifier = Modifier.padding(top = 6.dp),
+        onSpeakWord = { actions.onSpeak(it, false) },
+    )
     val pronunciation = if (options.ipaEnabled && options.showIpa && ipa.isNotBlank()) ipa else pt
     if (pronunciation.isNotBlank()) {
         Text(stringResource(R.string.pronunciation, pronunciation), fontSize = 13.sp, color = TextSecondary)

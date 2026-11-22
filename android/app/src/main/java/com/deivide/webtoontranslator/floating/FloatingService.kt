@@ -303,6 +303,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
         cardOverlay = ComposeOverlay(this, windows) {
             FloatingTranslationCard(
                 card, container.libraryRepository.library, container.translationActions.options, cardActions, controls,
+                opacity = settings.cardOpacity,
             )
         }.also { it.show(params) }
     }

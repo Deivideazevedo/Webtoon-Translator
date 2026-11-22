@@ -56,7 +56,6 @@ class FloatingIcon(
     private val density = context.resources.displayMetrics.density
     private val size = (ICON_DP * density).toInt()
     private val caretHeight = (CARET_DP * density).toInt()
-    private val edgeMargin = (EDGE_MARGIN_DP * density).toInt()
     private val screen = screenBounds(context)
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val handler = Handler(Looper.getMainLooper())
@@ -64,7 +63,7 @@ class FloatingIcon(
     private val params = overlayParams(size, size + caretHeight).apply {
         // Toques fora do ícone chegam como ACTION_OUTSIDE (e continuam indo pro app embaixo).
         flags = flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
-        x = screen.width() - size - edgeMargin
+        x = screen.width() - size
         y = screen.height() / 4
     }
     private var docked = true
@@ -137,11 +136,14 @@ class FloatingIcon(
         }.start()
     }
 
-    /** Desliza até a borda mais perto (com folga, longe do gesto de voltar). */
+    /**
+     * Desliza até a borda mais perto, encostando nela (igual ao soltar depois de passar da borda).
+     * O gesto de voltar do Android não atrapalha: a área do ícone é excluída dele (ver [show]).
+     */
     private fun dock() {
         if (docked) return
         docked = true
-        val target = if (params.x + size / 2 < screen.width() / 2) edgeMargin else screen.width() - size - edgeMargin
+        val target = if (params.x + size / 2 < screen.width() / 2) 0 else screen.width() - size
         ValueAnimator.ofInt(params.x, target).apply {
             duration = 220
             interpolator = DecelerateInterpolator()
@@ -289,7 +291,6 @@ class FloatingIcon(
     private companion object {
         const val ICON_DP = 50
         const val CARET_DP = 14
-        const val EDGE_MARGIN_DP = 12
         const val DIM_AFTER_MS = 2_500L
         const val DIM_ALPHA = 0.55f
         val ACCENT = Color.parseColor("#6EA8FE")

@@ -77,7 +77,11 @@ private fun OriginalLine(
     actions: TranslationCardActions,
 ) {
     if (text.isBlank()) return
-    GlossText(text, gloss, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+    GlossText(
+        text, gloss,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+        onSpeakWord = { actions.onSpeak(it, false) },
+    )
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
         SpeakButtons(text, actions.onSpeak)
         Pronunciation(pronunciationPt, pronunciationIpa, options, actions, Modifier.weight(1f))

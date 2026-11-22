@@ -39,7 +39,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.deivide.webtoontranslator.R
 import com.deivide.webtoontranslator.ui.home.HomeScreen
+import com.deivide.webtoontranslator.ui.more.AboutScreen
+import com.deivide.webtoontranslator.ui.more.AppearanceScreen
+import com.deivide.webtoontranslator.ui.more.BackupScreen
+import com.deivide.webtoontranslator.ui.more.BatteryScreen
+import com.deivide.webtoontranslator.ui.more.ErrorsScreen
 import com.deivide.webtoontranslator.ui.more.MoreScreen
+import com.deivide.webtoontranslator.ui.more.StorageScreen
 import com.deivide.webtoontranslator.ui.connection.ConnectionScreen
 import com.deivide.webtoontranslator.ui.voice.VoiceScreen
 import com.deivide.webtoontranslator.ui.theme.AppTheme
@@ -52,6 +58,12 @@ object Routes {
     const val MORE = "more"
     const val CONNECTION = "connection"
     const val VOICE = "voice"
+    const val APPEARANCE = "appearance"
+    const val BACKUP = "backup"
+    const val STORAGE = "storage"
+    const val ERRORS = "errors"
+    const val BATTERY = "battery"
+    const val ABOUT = "about"
 }
 
 private enum class Tab(val route: String, val icon: ImageVector, val label: Int) {
@@ -102,11 +114,15 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             ) {
                 composable(Routes.HOME) { HomeScreen(onOpenConnection = openConnection) }
                 composable(Routes.TRANSLATIONS) { TranslationsScreen() }
-                composable(Routes.MORE) {
-                    MoreScreen(onOpenConnection = openConnection, onOpenVoice = { navController.navigate(Routes.VOICE) })
-                }
+                composable(Routes.MORE) { MoreScreen(onOpen = { navController.navigate(it) }) }
                 composable(Routes.CONNECTION) { ConnectionScreen(onBack = back) }
                 composable(Routes.VOICE) { VoiceScreen(onBack = back) }
+                composable(Routes.APPEARANCE) { AppearanceScreen(onBack = back) }
+                composable(Routes.BACKUP) { BackupScreen(onBack = back) }
+                composable(Routes.STORAGE) { StorageScreen(onBack = back) }
+                composable(Routes.ERRORS) { ErrorsScreen(onBack = back) }
+                composable(Routes.BATTERY) { BatteryScreen(onBack = back) }
+                composable(Routes.ABOUT) { AboutScreen(onBack = back) }
             }
         }
         // A barra de baixo só aparece nas 3 abas; telas de detalhe ocupam a tela toda. Entra e sai

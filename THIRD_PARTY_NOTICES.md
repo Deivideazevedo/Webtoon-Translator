@@ -73,3 +73,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 O app também usa bibliotecas Rust de código aberto (Tauri, ocrs, rten, reqwest, entre outras), sob licenças
 MIT e/ou Apache 2.0. A lista completa está em `src-tauri/Cargo.lock`.
+
+O app Android usa ainda Jetpack Compose e AndroidX (Apache 2.0), os ícones Material Symbols do Google
+(Apache 2.0), JNA (Apache 2.0) e UniFFI (MPL 2.0); a lista completa está em
+`android/gradle/libs.versions.toml` e `android/rust-bridge/Cargo.lock`.

@@ -37,9 +37,96 @@
     <string name="more_connection_desc">Provedor, chave de API e modelo</string>
     <string name="more_appearance">Aparência</string>
     <string name="more_voice">Voz</string>
-    <string name="more_voice_desc">Velocidade da fala e exemplo</string>
+    <string name="more_voice_desc">Voz do celular, tom e velocidade</string>
     <string name="voice_speed">Velocidade</string>
-    <string name="voice_sample">Ouvir exemplo</string>
+    <string name="voice_label">Voz</string>
+    <string name="more_section_data">Dados</string>
+    <string name="more_section_support">Suporte</string>
+    <string name="more_appearance_desc">Tema, pronúncia em IPA e transparência do cartão</string>
+    <string name="appearance_theme">Tema</string>
+    <string name="appearance_ipa">Pronúncia em IPA</string>
+    <string name="appearance_ipa_desc">Mostra o botão IPA no cartão pra alternar com a pronúncia em português</string>
+    <string name="appearance_opacity">Transparência do cartão</string>
+    <string name="appearance_opacity_desc">Fundo do cartão de tradução flutuante; mais transparente deixa ver a arte do webtoon</string>
+    <string name="appearance_opacity_sample">E o "Arqueiro Divino", que nunca errava um alvo…</string>
+    <string name="more_backup">Backup</string>
+    <string name="more_backup_desc">Exportar e importar (mesmo arquivo do computador)</string>
+    <string name="backup_intro">O arquivo leva as configurações, os favoritos de modelo e as traduções recentes e favoritas. É o mesmo formato do Webtoon Translator do computador: dá pra exportar num e importar no outro.</string>
+    <string name="backup_include_keys">Incluir chaves de API</string>
+    <string name="backup_include_keys_desc">Desligado por segurança: o arquivo fica com as chaves em texto puro</string>
+    <string name="backup_export">Exportar backup</string>
+    <string name="backup_export_desc">Escolha onde salvar o arquivo</string>
+    <string name="backup_import">Importar backup</string>
+    <string name="backup_import_desc">Soma as traduções e substitui as configurações</string>
+    <string name="backup_exported">Backup salvo.</string>
+    <!-- recentes, favoritas, chaves -->
+    <string name="backup_imported">Importado: %1$d recentes, %2$d favoritas e %3$d chave(s) de API.</string>
+    <string name="backup_failed">Não deu certo: %1$s</string>
+    <string name="more_storage">Armazenamento</string>
+    <string name="more_storage_desc">Espaço das traduções salvas</string>
+    <!-- quantas / limite -->
+    <string name="storage_recent">%1$d de %2$d traduções</string>
+    <string name="storage_favorites">%1$d traduções</string>
+    <string name="storage_hint">Pra liberar espaço, exclua traduções na aba Traduções (segure o dedo num cartão).</string>
+    <string name="more_errors">Erros recentes</string>
+    <string name="more_errors_desc">Detalhes das últimas falhas de tradução</string>
+    <string name="errors_empty">Nenhum erro registrado.</string>
+    <string name="errors_hint">Toque num erro pra copiar o detalhe.</string>
+    <string name="errors_copied">Detalhe copiado.</string>
+    <string name="errors_clear">Limpar a lista</string>
+    <string name="more_battery">App fechando sozinho</string>
+    <string name="more_battery_desc">Liberar o app da economia de bateria</string>
+    <string name="battery_ok">Sem restrição de bateria</string>
+    <string name="battery_ok_desc">O Android não vai fechar o tradutor flutuante por economia.</string>
+    <string name="battery_restricted">Com economia de bateria</string>
+    <string name="battery_restricted_desc">O Android pode fechar o tradutor flutuante depois de um tempo.</string>
+    <string name="battery_steps">Se o ícone flutuante some sozinho, libere o app da economia de bateria:
+
+1. Toque em "Abrir configurações do app".
+2. Entre em Bateria.
+3. Escolha "Sem restrições" (Samsung) ou "Sem restrições / Não otimizar" (outros).</string>
+    <string name="battery_open">Abrir configurações do app</string>
+    <string name="battery_note">Os nomes mudam um pouco de fabricante pra fabricante.</string>
+    <string name="more_about">Sobre e licenças</string>
+    <string name="more_about_desc">Versão, licença e créditos</string>
+    <!-- versão -->
+    <string name="about_version">Versão %1$s</string>
+    <string name="about_license">Licença GPL-3.0</string>
+    <string name="about_license_desc">Software livre: qualquer pessoa pode usar, estudar, modificar, desde que mantenha o código aberto sob a mesma licença.</string>
+    <string name="about_source">Código-fonte</string>
+    <string name="about_credits">Créditos</string>
+    <string name="about_credits_text">• OCR: ocrs e seus modelos (CC BY-SA 4.0)
+• Dicionário de pronúncia: CMU Pronouncing Dictionary (BSD), distribuído pelo sherpa-onnx (Apache 2.0)
+• Voz: motor de voz do próprio Android
+• Interface: Jetpack Compose e ícones Material Symbols (Apache 2.0)
+• Ponte Rust ⇄ Kotlin: UniFFI (MPL 2.0) e JNA (Apache 2.0)
+• Bibliotecas Rust sob MIT/Apache 2.0</string>
+    <string name="about_free">Gratuito e sem anúncios. As traduções usam a sua própria chave de API.</string>
+    <string name="voice_default">Padrão do celular</string>
+    <string name="voice_default_desc">A voz em inglês (EUA) que o motor de voz do Android usa</string>
+    <string name="voice_none">Nenhuma voz em inglês instalada. Instale nas configurações de voz do Android.</string>
+    <string name="voice_network">Precisa de internet</string>
+    <!-- país · número da voz -->
+    <string name="voice_item">%1$s · Voz %2$d</string>
+    <string name="voice_pitch">Tom</string>
+    <string name="speed_test">Testar velocidade</string>
+    <string name="speed_test_desc">Mede uma tradução de teste no modelo escolhido</string>
+    <string name="speed_running">Medindo…</string>
+    <!-- tempo em segundos -->
+    <string name="speed_result">%1$.1f s</string>
+    <string name="speed_choose_model">Escolha um modelo antes de testar a velocidade.</string>
+    <string name="benchmark">Rodar benchmark</string>
+    <string name="benchmark_desc">Mede todos os modelos e marca os 5 mais rápidos como favoritos</string>
+    <!-- feitos de total -->
+    <string name="benchmark_progress">Medindo… %1$d de %2$d</string>
+    <string name="benchmark_result">Resultado do benchmark</string>
+    <!-- data/hora do benchmark -->
+    <string name="benchmark_result_desc">Medido em %1$s, do mais rápido pro mais lento. Marque ★ pra favoritar; toque num modelo pra usar.</string>
+    <!-- data/hora do benchmark -->
+    <string name="benchmark_last">Último: %1$s · toque pra ver</string>
+    <string name="benchmark_run_again">↻ Rodar de novo</string>
+    <string name="benchmark_failed_short">Falhou no último benchmark</string>
+    <string name="benchmark_failed">falhou: %1$s</string>
     <string name="theme_system">Automático</string>
     <string name="theme_light">Claro</string>
     <string name="theme_dark">Escuro</string>
@@ -129,7 +216,7 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
     <string name="settings_hide_key">ocultar</string>
     <string name="settings_model">Modelo</string>
     <string name="settings_loading_models">Buscando modelos…</string>
-    <string name="settings_speech_default_hint">Padrão: 0,70x (um pouco mais devagar que a fala normal, bom pra acompanhar a leitura).</string>
+    <string name="settings_speech_default_hint">Padrão: 1,00x, a fala normal, boa pra acompanhar a leitura. O 🐢 fala em 0,50x.</string>
     <string name="settings_reset_speed">↺ Voltar ao padrão</string>
     <string name="settings_save">Salvar</string>
     <string name="settings_saved">Configurações salvas.</string>

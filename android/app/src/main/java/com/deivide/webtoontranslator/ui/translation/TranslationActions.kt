@@ -2,6 +2,7 @@ package com.deivide.webtoontranslator.ui.translation
 
 import com.deivide.webtoontranslator.R
 import com.deivide.webtoontranslator.data.library.LibraryRepository
+import com.deivide.webtoontranslator.data.settings.AppSettings
 import com.deivide.webtoontranslator.data.settings.ReadingOptions
 import com.deivide.webtoontranslator.data.settings.ReadingPreferences
 import com.deivide.webtoontranslator.data.settings.SettingsRepository
@@ -24,8 +25,8 @@ class TranslationActions(
 
     /** null se falou; senão o aviso pra mostrar. */
     fun speak(text: String, slow: Boolean): UiText? {
-        val rate = if (slow) SLOW_RATE else settings.load().speechSpeed
-        return when (speech.speak(text, rate)) {
+        val speed = if (slow) AppSettings.SLOW_SPEECH_SPEED else settings.load().speechSpeed
+        return when (speech.speak(text, AppSettings.nativeRate(speed), settings.speechPitch, settings.voiceName)) {
             SpeechPlayer.Result.Spoken -> null
             SpeechPlayer.Result.NotReady -> UiText.Resource(R.string.speech_not_ready)
             SpeechPlayer.Result.MissingEnglishVoice -> UiText.Resource(R.string.speech_missing_voice)
@@ -39,8 +40,4 @@ class TranslationActions(
 
     fun updateOptions(change: (ReadingOptions) -> ReadingOptions) = reading.update(change)
 
-    private companion object {
-        /** Velocidade do 🐢: absoluta, como no desktop. */
-        const val SLOW_RATE = 0.5f
-    }
 }

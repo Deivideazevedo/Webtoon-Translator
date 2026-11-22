@@ -31,6 +31,8 @@ data class HomeUiState(
     val settings: AppSettings? = null,
     val mode: TranslationMode = TranslationMode.REGION,
     val favoriteModels: List<String> = emptyList(),
+    /** Tempos do último benchmark do provedor em uso (ordenam a lista de modelos). */
+    val speeds: Map<String, Double?> = emptyMap(),
     val models: ModelList = ModelList(),
     val last: Translation? = null,
     val lastIsFavorite: Boolean = false,
@@ -51,17 +53,27 @@ class HomeViewModel(
     private val modelLoader = ModelListLoader(translations, viewModelScope)
     private val notice = MutableStateFlow<UiText?>(null)
 
-    private val configuration = combine(settings.current, settings.mode, settings.favoriteModels) { s, m, f -> Triple(s, m, f) }
+    private val configuration = combine(settings.current, settings.mode, settings.favoriteModels, settings.benchmarks) { s, m, f, b ->
+        Configuration(s, m, f, b[s.provider]?.speeds.orEmpty())
+    }
+
+    private data class Configuration(
+        val settings: AppSettings,
+        val mode: TranslationMode,
+        val favorites: List<String>,
+        val speeds: Map<String, Double?>,
+    )
 
     val uiState: StateFlow<HomeUiState> = combine(
         configuration, floating.running, library.library, actions.options, combine(modelLoader.list, notice) { m, n -> m to n },
-    ) { (current, mode, favorites), running, lib, options, (list, message) ->
+    ) { (current, mode, favorites, speeds), running, lib, options, (list, message) ->
         val last = lib.recent.firstOrNull()
         HomeUiState(
             running = running,
             settings = current,
             mode = mode,
             favoriteModels = favorites,
+            speeds = speeds,
             models = list,
             last = last,
             lastIsFavorite = last != null && last.id in lib.favoriteIds,

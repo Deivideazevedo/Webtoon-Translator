@@ -14,9 +14,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material3.IconButton
+import com.deivide.webtoontranslator.data.settings.SavedBenchmark
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -46,6 +56,7 @@ import com.deivide.webtoontranslator.ui.components.OptionSheet
 import com.deivide.webtoontranslator.ui.components.SectionCard
 import com.deivide.webtoontranslator.ui.components.SectionTitle
 import com.deivide.webtoontranslator.ui.components.SelectorField
+import com.deivide.webtoontranslator.ui.components.SettingRow
 import com.deivide.webtoontranslator.ui.theme.AppTheme
 
 private enum class Sheet { NONE, PROVIDER, MODEL }
@@ -102,13 +113,45 @@ fun ConnectionScreen(
             }
 
             SectionTitle(stringResource(R.string.settings_model))
-            SectionCard {
+            SectionCard(padding = false) {
                 SelectorField(
                     icon = Icons.Filled.AutoAwesome,
                     color = icons.blue,
                     label = stringResource(R.string.model_label),
                     value = settings.model.ifBlank { stringResource(R.string.model_choose) },
                     onClick = { sheet = Sheet.MODEL },
+                    modifier = Modifier.padding(16.dp),
+                )
+                val speed = state.speedTest
+                SettingRow(
+                    icon = Icons.Filled.Timer,
+                    color = icons.orange,
+                    title = stringResource(R.string.speed_test),
+                    subtitle = when {
+                        speed.running -> stringResource(R.string.speed_running)
+                        speed.secs != null -> stringResource(R.string.speed_result, speed.secs)
+                        speed.error != null -> speed.error.asString()
+                        else -> stringResource(R.string.speed_test_desc)
+                    },
+                    divider = true,
+                    onClick = if (speed.running) null else viewModel::testSpeed,
+                    trailing = { if (speed.running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) },
+                )
+                val bench = state.benchmark
+                SettingRow(
+                    icon = Icons.Filled.Flag,
+                    color = icons.green,
+                    title = stringResource(R.string.benchmark),
+                    subtitle = when {
+                        bench.running && bench.total > 0 -> stringResource(R.string.benchmark_progress, bench.done, bench.total)
+                        bench.running -> stringResource(R.string.settings_loading_models)
+                        bench.error != null -> bench.error.asString()
+                        state.saved != null -> stringResource(R.string.benchmark_last, formatTime(state.saved!!.timeMs))
+                        else -> stringResource(R.string.benchmark_desc)
+                    },
+                    divider = true,
+                    onClick = if (settings.apiKey.isBlank()) null else viewModel::openBenchmark,
+                    trailing = { if (bench.running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) },
                 )
             }
 
@@ -150,6 +193,7 @@ fun ConnectionScreen(
             favorites = state.favorites,
             models = state.models,
             hasApiKey = settings.apiKey.isNotBlank(),
+            speeds = state.saved?.speeds.orEmpty(),
             onLoad = viewModel::loadModels,
             onSelect = {
                 viewModel.selectModel(it)
@@ -160,7 +204,80 @@ fun ConnectionScreen(
         )
         Sheet.NONE -> Unit
     }
+
+    val saved = state.saved
+    if (state.benchmark.showResults && saved != null) {
+        BenchmarkSheet(
+            saved = saved,
+            running = state.benchmark.running,
+            progress = state.benchmark.done to state.benchmark.total,
+            current = settings.model,
+            favorites = state.favorites,
+            onSelect = {
+                viewModel.selectModel(it)
+                viewModel.dismissBenchmark()
+            },
+            onToggleFavorite = viewModel::toggleFavorite,
+            onRunAgain = viewModel::runBenchmark,
+            onDismiss = viewModel::dismissBenchmark,
+        )
+    }
 }
+
+/** Último benchmark: do mais rápido pro mais lento, com ★ pra marcar e "↻ Rodar de novo". */
+@Composable
+private fun BenchmarkSheet(
+    saved: SavedBenchmark,
+    running: Boolean,
+    progress: Pair<Int, Int>,
+    current: String,
+    favorites: List<String>,
+    onSelect: (String) -> Unit,
+    onToggleFavorite: (String) -> Unit,
+    onRunAgain: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    OptionSheet(stringResource(R.string.benchmark_result), onDismiss = onDismiss) {
+        Text(
+            stringResource(R.string.benchmark_result_desc, formatTime(saved.timeMs)),
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        OptionItem(
+            title = stringResource(R.string.benchmark_run_again),
+            description = if (running) stringResource(R.string.benchmark_progress, progress.first, progress.second) else null,
+            icon = Icons.Filled.Refresh,
+            iconColor = AppTheme.colors.icons.green,
+            selected = false,
+            enabled = !running,
+            onClick = onRunAgain,
+            trailing = { if (running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) },
+        )
+        saved.results.forEach { r ->
+            val favorite = r.model in favorites
+            OptionItem(
+                title = r.model,
+                description = r.secs?.let { stringResource(R.string.speed_result, it) }
+                    ?: stringResource(R.string.benchmark_failed, r.error.orEmpty()),
+                selected = r.model == current,
+                onClick = { onSelect(r.model) },
+                trailing = {
+                    IconButton(onClick = { onToggleFavorite(r.model) }) {
+                        Icon(
+                            if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                            contentDescription = stringResource(if (favorite) R.string.action_unfavorite else R.string.action_favorite),
+                            tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+            )
+        }
+    }
+}
+
+private fun formatTime(ms: Long): String =
+    java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(ms))
 
 @Composable
 private fun providerIcon(provider: Provider): Pair<ImageVector, Color> {

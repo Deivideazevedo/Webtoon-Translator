@@ -124,8 +124,9 @@ fun GlossTooltipHost(modifier: Modifier = Modifier, content: @Composable () -> U
 
 /**
  * Texto em inglês com pontilhado embaixo das palavras que têm tradução; tocar numa palavra mostra
- * a tradução numa etiqueta em cima dela (tocar de novo fecha; em outra palavra, troca). A etiqueta
- * é desenhada pelo [GlossTooltipHost] em volta do cartão.
+ * a tradução numa etiqueta em cima dela (tocar de novo fecha; em outra palavra, troca) e, com
+ * [onSpeakWord], fala a palavra (a voz do Android sai na hora). A etiqueta é desenhada pelo
+ * [GlossTooltipHost] em volta do cartão.
  */
 @Composable
 fun GlossText(
@@ -134,6 +135,7 @@ fun GlossText(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onSurface,
     fontSize: TextUnit = 14.sp,
+    onSpeakWord: ((String) -> Unit)? = null,
 ) {
     val tips = LocalGlossTips.current
     val owner = remember { Any() }
@@ -169,7 +171,9 @@ fun GlossText(
                     val l = layout ?: return@detectTapGestures
                     val offset = l.getOffsetForPosition(pos)
                     val hit = spans.firstOrNull { offset in it.start until it.end }
-                    tips?.open = if (hit == null || hit == selected) null else Tip(owner, hit, l.lineRects(hit).first().translate(origin))
+                    val opening = hit != null && hit != selected
+                    tips?.open = if (opening) Tip(owner, hit!!, l.lineRects(hit).first().translate(origin)) else null
+                    if (opening) onSpeakWord?.invoke(text.substring(hit!!.start, hit.end))
                 }
             },
     )
