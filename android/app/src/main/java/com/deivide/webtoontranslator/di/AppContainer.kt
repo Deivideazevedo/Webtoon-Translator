@@ -10,6 +10,7 @@ import com.deivide.webtoontranslator.data.settings.SettingsRepository
 import com.deivide.webtoontranslator.data.speech.SpeechPlayer
 import com.deivide.webtoontranslator.data.translation.BenchmarkRunner
 import com.deivide.webtoontranslator.data.translation.TranslationRepository
+import com.deivide.webtoontranslator.data.update.AppUpdater
 import com.deivide.webtoontranslator.floating.FloatingStatus
 import com.deivide.webtoontranslator.floating.RegionTranslator
 import com.deivide.webtoontranslator.floating.ScreenTranslator
@@ -34,6 +35,7 @@ class AppContainer(context: Context) {
     val backupRepository = BackupRepository(settingsRepository, libraryRepository)
     val benchmarkRunner = BenchmarkRunner(translationRepository, settingsRepository, errorLog)
     val floatingStatus = FloatingStatus()
+    val appUpdater = AppUpdater(context)
 
     /** Começa a carregar o motor Rust em segundo plano (OCR pronto antes da primeira seleção). */
     suspend fun warmUp() {

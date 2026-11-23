@@ -248,4 +248,16 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
     <string name="tutorial_4_body">No cartão, 🔊 lê o inglês e 🐢 lê devagar. Toque numa palavra pontilhada pra ver a tradução dela. O 📖 abre os trechos e a gramática, e o rodapé do modelo troca a IA e traduz de novo.</string>
     <string name="tutorial_5_title">Seu histórico</string>
     <string name="tutorial_5_body">Em Traduções ficam as recentes e as favoritas (★). Lá dá pra digitar ou colar qualquer frase em inglês e ver a mesma análise. Em Mais → Backup você leva tudo pro computador.</string>
+
+    <!-- Atualização pelo app -->
+    <string name="update_available">Nova versão %1$s disponível</string>
+    <string name="update_download">Baixar e instalar</string>
+    <string name="update_downloading">Baixando… %1$d%%</string>
+    <string name="update_install">Pronto: toque pra instalar</string>
+    <string name="update_failed">Não deu pra baixar a atualização. Confira a internet e tente de novo.</string>
+    <string name="update_later">Agora não</string>
+    <string name="update_check">Procurar atualizações</string>
+    <string name="update_check_desc">Confere se há uma versão mais nova no GitHub</string>
+    <string name="update_checking">Procurando…</string>
+    <string name="update_up_to_date">Você está na versão mais nova</string>
 </resources>

@@ -17,6 +17,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.padding
 import com.deivide.webtoontranslator.R
+import com.deivide.webtoontranslator.ui.components.rememberAppUpdater
+import com.deivide.webtoontranslator.data.update.AppUpdater
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.filled.SystemUpdate
 import com.deivide.webtoontranslator.ui.components.SectionCard
 import com.deivide.webtoontranslator.ui.components.SectionTitle
 import com.deivide.webtoontranslator.ui.components.SettingRow
@@ -42,6 +47,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 title = stringResource(R.string.app_name),
                 subtitle = stringResource(R.string.about_version, version),
             )
+            UpdateRow()
             SettingRow(
                 icon = Icons.Filled.Gavel,
                 color = icons.purple,
@@ -70,4 +76,36 @@ fun AboutScreen(onBack: () -> Unit) {
             modifier = Modifier.padding(start = 8.dp, top = 12.dp),
         )
     }
+}
+
+/** "Procurar atualizações": confere o GitHub na hora e, se houver versão nova, baixa e instala. */
+@Composable
+private fun UpdateRow() {
+    val updater = rememberAppUpdater()
+    val state by updater.state.collectAsStateWithLifecycle()
+    val subtitle = when (val s = state) {
+        AppUpdater.State.Checking -> stringResource(R.string.update_checking)
+        AppUpdater.State.UpToDate -> stringResource(R.string.update_up_to_date)
+        is AppUpdater.State.Available -> stringResource(R.string.update_available, s.version)
+        is AppUpdater.State.Downloading -> stringResource(R.string.update_downloading, (s.progress * 100).toInt())
+        is AppUpdater.State.Ready -> stringResource(R.string.update_install)
+        is AppUpdater.State.Failed -> stringResource(R.string.update_failed)
+        AppUpdater.State.Idle -> stringResource(R.string.update_check_desc)
+    }
+    SettingRow(
+        icon = Icons.Filled.SystemUpdate,
+        color = AppTheme.colors.icons.green,
+        title = stringResource(R.string.update_check),
+        subtitle = subtitle,
+        divider = true,
+        onClick = {
+            when (val s = state) {
+                is AppUpdater.State.Available -> updater.download()
+                is AppUpdater.State.Ready -> updater.install(s.apk)
+                is AppUpdater.State.Failed -> if (s.version != null) updater.download() else updater.check(force = true)
+                is AppUpdater.State.Downloading, AppUpdater.State.Checking -> Unit
+                else -> updater.check(force = true)
+            }
+        },
+    )
 }

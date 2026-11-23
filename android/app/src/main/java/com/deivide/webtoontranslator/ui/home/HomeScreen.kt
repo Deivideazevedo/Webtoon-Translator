@@ -47,6 +47,8 @@ import com.deivide.webtoontranslator.floating.FloatingService
 import com.deivide.webtoontranslator.ui.common.asString
 import com.deivide.webtoontranslator.ui.components.AppTopBar
 import com.deivide.webtoontranslator.ui.components.ModelSheet
+import com.deivide.webtoontranslator.ui.components.UpdateCard
+import com.deivide.webtoontranslator.ui.components.rememberAppUpdater
 import com.deivide.webtoontranslator.ui.components.SectionCard
 import com.deivide.webtoontranslator.ui.components.SectionTitle
 import com.deivide.webtoontranslator.ui.components.SelectorField
@@ -72,6 +74,9 @@ fun HomeScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val floating = rememberFloatingStarter()
+    val updater = rememberAppUpdater()
+    // Versão nova no GitHub? Confere uma vez por abertura do app.
+    LaunchedEffect(updater) { updater.check() }
     var sheet by rememberSaveable { mutableStateOf(Sheet.NONE) }
     val snackbar = remember { SnackbarHostState() }
     val notice = state.notice?.asString()
@@ -96,6 +101,7 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            UpdateCard(updater, Modifier.padding(bottom = 12.dp))
             SectionCard {
                 LanguagePair()
                 Spacer(Modifier.height(20.dp))
