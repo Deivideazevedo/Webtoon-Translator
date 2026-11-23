@@ -4,12 +4,12 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 
 use webtoon_core::benchmark;
 use webtoon_core::library::{self, Library, List};
-use webtoon_core::ocr::{self, OcrEngine};
+use webtoon_core::ocr;
 use webtoon_core::pronunciation;
 use webtoon_core::translate::{self, BreakdownItem, StreamEvent, TranslationResult, Wire};
 
@@ -165,56 +165,24 @@ pub trait TranslateListener: Send + Sync {
 
 #[derive(uniffi::Object)]
 pub struct Engine {
-    models_dir: PathBuf,
     lexicon: PathBuf,
-    ocr: Mutex<Option<OcrEngine>>,
-}
-
-impl Engine {
-    fn with_ocr<T>(&self, f: impl FnOnce(&OcrEngine) -> Result<T, String>) -> Result<T, BridgeError> {
-        let mut guard = self.ocr.lock().map_err(|e| e.to_string())?;
-        if guard.is_none() {
-            *guard = Some(ocr::load_engine(&self.models_dir)?);
-        }
-        Ok(f(guard.as_ref().expect("OCR carregado acima"))?)
-    }
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 impl Engine {
-    /// `models_dir` tem text-detection.onnx e text-recognition.onnx; `lexicon_path` é o
-    /// lexicon-en-us.txt da pronúncia.
+    /// `lexicon_path` é o lexicon-en-us.txt da pronúncia. O OCR é o do Google, no lado Kotlin.
     #[uniffi::constructor]
-    pub fn new(models_dir: String, lexicon_path: String) -> Arc<Self> {
-        Arc::new(Engine { models_dir: models_dir.into(), lexicon: lexicon_path.into(), ocr: Mutex::new(None) })
+    pub fn new(lexicon_path: String) -> Arc<Self> {
+        Arc::new(Engine { lexicon: lexicon_path.into() })
     }
 
-    /// Carrega OCR e dicionário antes da primeira captura (chamar em background).
-    pub fn warm_up(&self) -> Result<(), BridgeError> {
-        self.with_ocr(|_| Ok(()))?;
+    /// Carrega o dicionário da pronúncia antes da primeira tradução (chamar em background).
+    pub fn warm_up(&self) {
         pronunciation::warm_up(&self.lexicon);
-        Ok(())
     }
 
-    /// Texto de uma imagem RGBA (4 bytes por pixel, como `Bitmap.copyPixelsToBuffer` em ARGB_8888).
-    pub fn recognize(&self, rgba: Vec<u8>, width: u32, height: u32) -> Result<String, BridgeError> {
-        let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-        // Linhas do mesmo balão juntas num parágrafo (o modelo traduz a frase, não linha a linha).
-        self.with_ocr(|engine| ocr::recognize_paragraphs(engine, &rgb, width, height))
-    }
-
-    /// Balões de uma imagem RGBA inteira (linhas do OCR agrupadas por proximidade).
-    pub fn recognize_blocks(&self, rgba: Vec<u8>, width: u32, height: u32) -> Result<Vec<TextBlock>, BridgeError> {
-        let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-        let lines = self.with_ocr(|engine| ocr::recognize_lines(engine, &rgb, width, height))?;
-        Ok(ocr::group_blocks(&lines)
-            .into_iter()
-            .map(|b| TextBlock { text: b.text, left: b.left, top: b.top, right: b.right, bottom: b.bottom })
-            .collect())
-    }
-
-    /// Junta em balões linhas lidas por outro OCR (o do Google, no Android), com a mesma regra
-    /// usada nas linhas do ocrs ([ocr::group_blocks]).
+    /// Junta em balões as linhas lidas pelo OCR do Google, com a mesma regra do desktop
+    /// ([ocr::group_blocks]).
     pub fn group_lines(&self, lines: Vec<TextBlock>) -> Vec<TextBlock> {
         let lines: Vec<ocr::OcrLine> = lines
             .into_iter()

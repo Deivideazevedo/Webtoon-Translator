@@ -9,8 +9,9 @@ import kotlinx.coroutines.withContext
 import uniffi.webtoon_android.Engine
 
 /**
- * Dono do motor Rust (OCR, tradução, pronúncia). Criado uma vez, sob demanda: os modelos vêm nos
- * assets do APK e são copiados pra pasta do app (o Rust lê por caminho), de novo a cada atualização.
+ * Dono do motor Rust (tradução, pronúncia, agrupamento das linhas do OCR). Criado uma vez, sob
+ * demanda: o dicionário da pronúncia vem nos assets do APK e é copiado pra pasta do app (o Rust lê
+ * por caminho), de novo a cada atualização.
  */
 class EngineProvider(private val context: Context) {
     private val mutex = Mutex()
@@ -23,8 +24,8 @@ class EngineProvider(private val context: Context) {
     private fun create(): Engine {
         val dir = File(context.filesDir, "models").apply { mkdirs() }
         installModels(dir)
-        return Engine(dir.path, File(dir, LEXICON).path).apply {
-            // Carrega OCR e dicionário agora, pra primeira captura não pagar esse tempo.
+        return Engine(File(dir, LEXICON).path).apply {
+            // Carrega o dicionário agora, pra primeira tradução não pagar esse tempo.
             runCatching { warmUp() }
         }
     }
@@ -34,6 +35,8 @@ class EngineProvider(private val context: Context) {
         val marker = File(dir, ".installed")
         val upToDate = marker.exists() && marker.readText() == version && MODEL_FILES.all { File(dir, it).exists() }
         if (upToDate) return
+        // Modelos do OCR antigo (ocrs), que versões anteriores copiavam pra cá.
+        OLD_FILES.forEach { File(dir, it).delete() }
         MODEL_FILES.forEach { name ->
             context.assets.open(name).use { input -> File(dir, name).outputStream().use(input::copyTo) }
         }
@@ -42,6 +45,7 @@ class EngineProvider(private val context: Context) {
 
     private companion object {
         const val LEXICON = "lexicon-en-us.txt"
-        val MODEL_FILES = listOf("text-detection.onnx", "text-recognition.onnx", LEXICON)
+        val MODEL_FILES = listOf(LEXICON)
+        val OLD_FILES = listOf("text-detection.onnx", "text-recognition.onnx")
     }
 }

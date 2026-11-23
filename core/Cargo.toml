@@ -6,9 +6,11 @@ license = "GPL-3.0-or-later"
 description = "Núcleo compartilhado (desktop e Android): OCR, tradução com streaming, pronúncia e voz"
 
 [features]
-default = ["kokoro"]
+default = ["kokoro", "ocr"]
 # Voz Kokoro via sherpa-onnx. No Android ela é um download opcional, então dá pra compilar sem.
 kokoro = ["dep:sherpa-onnx"]
+# OCR ocrs (desktop). O Android usa o OCR do Google (ML Kit) e só o agrupamento em balões daqui.
+ocr = ["dep:ocrs", "dep:rten"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -17,8 +19,8 @@ serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "charset"] }
 tokio = { version = "1", features = ["time"] }
 base64 = "0.22"
-ocrs = "0.14"
-rten = "0.28"
+ocrs = { version = "0.14", optional = true }
+rten = { version = "0.28", optional = true }
 sherpa-onnx = { version = "2.0.2", default-features = false, features = ["static"], optional = true }
 sha2 = "0.11.1"
 tar = "0.4.46"

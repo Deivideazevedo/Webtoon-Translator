@@ -22,8 +22,8 @@ android {
     }
 
     // Assinatura do release: no GitHub Actions a chave vem dos secrets (ver .github/workflows/release.yml).
-    // Sem as variáveis (build local), o release sai sem assinatura.
-    val keystore = System.getenv("ANDROID_KEYSTORE_FILE")
+    // Sem as variáveis (build local, compilação de cache no main), o release sai sem assinatura.
+    val keystore = System.getenv("ANDROID_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
     if (keystore != null) {
         signingConfigs {
             create("release") {
@@ -37,7 +37,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: tira o código e os recursos que o app não usa (ex.: os milhares de ícones do
+            // Material que vêm no pacote) e otimiza o resto. Regras de quem usa reflexão em proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (keystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
@@ -57,7 +61,7 @@ val buildRust = tasks.register<Exec>("buildRust") {
     commandLine("bash", "build-rust.sh")
 }
 
-// Modelos do OCR e dicionário da pronúncia: os mesmos arquivos do desktop, copiados pros assets.
+// Dicionário da pronúncia: o mesmo arquivo do desktop, copiado pros assets.
 abstract class CopyModelsTask : DefaultTask() {
     @get:InputFiles
     abstract val sources: ConfigurableFileCollection
@@ -76,8 +80,6 @@ abstract class CopyModelsTask : DefaultTask() {
 
 val copyModels = tasks.register<CopyModelsTask>("copyModels") {
     sources.from(
-        "../../src-tauri/ocr-models/text-detection.onnx",
-        "../../src-tauri/ocr-models/text-recognition.onnx",
         "../../src-tauri/tts-models/lexicon-en-us.txt",
     )
     outputDir = layout.buildDirectory.dir("generated/models")

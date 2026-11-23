@@ -62,7 +62,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## OCR: modelos do ocrs (`ocr-models/`)
+## OCR do desktop: modelos do ocrs (`ocr-models/`)
 
 - Origem: https://github.com/robertknight/ocrs-models (modelos em https://huggingface.co/robertknight/ocrs),
   treinados no conjunto de dados HierText.
@@ -76,7 +76,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 - Licença: não é software livre; uso sob os termos do Google (ML Kit Terms of Service:
   https://developers.google.com/ml-kit/terms). A distribuição junto com o app é autorizada pela permissão
   adicional no fim do [LICENSE](LICENSE).
-- O ocrs (acima) continua no app Android como reserva, caso o ML Kit falhe.
 
 ## Bibliotecas
 

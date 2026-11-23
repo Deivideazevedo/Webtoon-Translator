@@ -6,8 +6,6 @@ import com.deivide.webtoontranslator.data.settings.AppSettings
 import com.deivide.webtoontranslator.domain.model.BenchmarkResult
 import com.deivide.webtoontranslator.domain.model.ScreenBlock
 import com.deivide.webtoontranslator.domain.model.TranslationEvent
-import java.nio.ByteBuffer
-import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -18,9 +16,9 @@ import uniffi.webtoon_android.TextBlock
 import uniffi.webtoon_android.TranslateRequest
 
 /**
- * OCR + tradução. O OCR é o do Google (ML Kit, no aparelho: mais rápido e sem o ruído das bordas
- * de balão); se ele falhar, o ocrs do núcleo Rust lê no lugar. O resto do app só enxerga os tipos
- * de `domain.model`.
+ * OCR + tradução. O OCR é o do Google (ML Kit, no aparelho: rápido e sem o ruído das bordas de
+ * balão); a tradução e a pronúncia vêm do núcleo Rust. O resto do app só enxerga os tipos de
+ * `domain.model`.
  */
 class TranslationRepository(private val engines: EngineProvider) {
     private val googleOcr by lazy { GoogleOcr() }
@@ -31,32 +29,11 @@ class TranslationRepository(private val engines: EngineProvider) {
     }
 
     /** Texto em inglês de uma imagem: linhas do balão num parágrafo, balões separados por "\n". */
-    suspend fun recognize(image: Bitmap): String {
-        googleBlocksOrNull(image)?.let { blocks -> return blocks.joinToString("\n") { it.text } }
-        val engine = engines.get()
-        return withContext(Dispatchers.Default) {
-            engine.recognize(image.rgbaBytes(), image.width.toUInt(), image.height.toUInt())
-        }
-    }
+    suspend fun recognize(image: Bitmap): String = googleBlocks(image).joinToString("\n") { it.text }
 
     /** Balões da imagem inteira (modo tela cheia), com a caixa de cada um. */
-    suspend fun recognizeBlocks(image: Bitmap): List<ScreenBlock> {
-        googleBlocksOrNull(image)?.let { blocks -> return blocks.map { ScreenBlock(it.text, it.left, it.top, it.right, it.bottom) } }
-        val engine = engines.get()
-        return withContext(Dispatchers.Default) {
-            engine.recognizeBlocks(image.rgbaBytes(), image.width.toUInt(), image.height.toUInt())
-                .map { ScreenBlock(it.text, it.left, it.top, it.right, it.bottom) }
-        }
-    }
-
-    /** Balões lidos pelo OCR do Google; null se ele falhou (aí quem lê é o ocrs). */
-    private suspend fun googleBlocksOrNull(image: Bitmap): List<TextBlock>? = try {
-        googleBlocks(image)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        null
-    }
+    suspend fun recognizeBlocks(image: Bitmap): List<ScreenBlock> =
+        googleBlocks(image).map { ScreenBlock(it.text, it.left, it.top, it.right, it.bottom) }
 
     /**
      * OCR do Google: descarta as linhas que não são texto do quadrinho e junta as outras em balões
@@ -119,9 +96,6 @@ class TranslationRepository(private val engines: EngineProvider) {
         engines.get().listModels(settings.provider.id, settings.baseUrl, settings.apiKey).sorted()
 }
 
-/** Pixels RGBA (o formato que a ponte Rust espera) de um bitmap ARGB_8888. */
-private fun Bitmap.rgbaBytes(): ByteArray =
-    ByteBuffer.allocate(byteCount).also(::copyPixelsToBuffer).array()
 
 /** Linhas do OCR do Google com confiança abaixo disso são descartadas (lixo, não texto). */
 private const val MIN_CONFIDENCE = 0.45f

@@ -1,11 +1,15 @@
-//! OCR local (ocrs + rten, Rust puro: roda igual no desktop e no Android).
+//! OCR local (ocrs + rten, Rust puro) do desktop, e o agrupamento das linhas em balões, que o
+//! Android também usa com as linhas do OCR do Google (sem a feature `ocr`).
 
+#[cfg(feature = "ocr")]
 use std::path::Path;
 
+#[cfg(feature = "ocr")]
 pub use ocrs::OcrEngine;
 
 /// Carrega os modelos de detecção e reconhecimento de `models_dir` (text-detection.onnx e
 /// text-recognition.onnx).
+#[cfg(feature = "ocr")]
 pub fn load_engine(models_dir: &Path) -> Result<OcrEngine, String> {
     let base = models_dir;
     let detection_model = rten::Model::load_file(base.join("text-detection.onnx"))
@@ -21,6 +25,7 @@ pub fn load_engine(models_dir: &Path) -> Result<OcrEngine, String> {
 }
 
 /// Lê o texto de uma imagem RGB (3 bytes por pixel, linha a linha).
+#[cfg(feature = "ocr")]
 pub fn recognize_text(engine: &OcrEngine, rgb: &[u8], width: u32, height: u32) -> Result<String, String> {
     let img_source = ocrs::ImageSource::from_bytes(rgb, (width, height))
         .map_err(|e| format!("Falha ao preparar imagem pro OCR: {e}"))?;
@@ -43,6 +48,7 @@ pub fn recognize_text(engine: &OcrEngine, rgb: &[u8], width: u32, height: u32) -
 /// Texto de um recorte com as linhas de cada balão juntas num parágrafo, e balões diferentes
 /// separados por "\n". O OCR devolve uma linha por linha do desenho; mandando assim pro modelo,
 /// ele às vezes trata cada linha como um balão e devolve a tradução quebrada.
+#[cfg(feature = "ocr")]
 pub fn recognize_paragraphs(engine: &OcrEngine, rgb: &[u8], width: u32, height: u32) -> Result<String, String> {
     let lines = recognize_lines(engine, rgb, width, height)?;
     Ok(group_blocks(&lines).into_iter().map(|b| b.text).collect::<Vec<_>>().join("\n"))
@@ -76,6 +82,7 @@ pub struct TextBlock {
 }
 
 /// Linhas de texto com a posição de cada uma (modo tela cheia), na ordem de leitura.
+#[cfg(feature = "ocr")]
 pub fn recognize_lines(engine: &OcrEngine, rgb: &[u8], width: u32, height: u32) -> Result<Vec<OcrLine>, String> {
     use ocrs::TextItem;
     let img_source = ocrs::ImageSource::from_bytes(rgb, (width, height))
