@@ -2,21 +2,31 @@
 # rascunho de Release só. Dispara ao enviar uma tag de versão:  git tag v0.2.0 && git push origin v0.2.0
 # Dá pra gerar de novo à mão (Actions → Release → Run workflow, com a tag). O job "release" cria o rascunho
 # (ou acha o que já existe) e os 3 builds rodam em paralelo, cada um anexando seus arquivos assim que termina.
-# A cada push no main os 3 só compilam (sem release), pra deixar o cache pronto: as tags reaproveitam o cache
-# do main e o release cai de ~11 pra ~6 min.
+# Push no main que muda dependência (Cargo/Gradle): os 3 só compilam (sem release), pra deixar o cache
+# pronto. As tags reaproveitam o cache do main (as dependências compiladas) e só recompilam o nosso
+# código; commit comum não roda nada no main, já que o cache de antes continua servindo.
 # O APK é assinado com a chave dos secrets ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD /
 # ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD: sempre a mesma, senão o Android não instala a atualização por cima.
 name: Release
-# Nome de cada execução na aba Actions: o release de verdade ou só a compilação de cache do main.
+# Nome de cada execução na aba Actions: o release de verdade ou só a compilação de cache do main,
+# seguido do título do commit.
 run-name: >-
-  ${{ github.ref_type == 'tag' && format('Release {0}', github.ref_name)
+  ${{ github.ref_type == 'tag' && format('Release {0} · {1}', github.ref_name, github.event.head_commit.message)
   || github.event_name == 'workflow_dispatch' && format('Release {0} (gerado de novo)', inputs.tag)
-  || format('Cache ({0})', github.ref_name) }}
+  || format('Cache ({0}) · {1}', github.ref_name, github.event.head_commit.message) }}
 
 on:
   push:
     tags: ["v*"]
     branches: [main]
+    # Só vale pro main (o GitHub não aplica filtro de arquivos a tags): roda quando as dependências mudam.
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "android/**/*.gradle.kts"
+      - "android/gradle/libs.versions.toml"
+      - "android/gradle/wrapper/**"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
     inputs:
       tag:
