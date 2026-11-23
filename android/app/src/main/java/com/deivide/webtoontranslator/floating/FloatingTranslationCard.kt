@@ -41,6 +41,8 @@ import kotlinx.coroutines.flow.StateFlow
 internal class FloatingCardControls(
     /** Arrasto pelo cartão, em pixels. */
     val onDrag: (dx: Float, dy: Float) -> Unit,
+    /** Soltou o cartão depois de arrastar. */
+    val onDragEnd: () -> Unit,
     /** ⌗ redefinir a área (só no modo região fixa). */
     val onReselect: (() -> Unit)?,
     /** ⚙ opções (modo, voltar fecha, velocidade da voz). */
@@ -82,7 +84,7 @@ internal fun FloatingTranslationCard(
                 .padding(horizontal = 8.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = alpha))
-                .dragAnywhere(scroll, controls.onDrag)
+                .dragAnywhere(scroll, controls.onDrag, controls.onDragEnd)
                 .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.5f)
                 .padding(10.dp),
             scroll = scroll,
@@ -102,7 +104,7 @@ internal fun FloatingTranslationCard(
  * Aprender aberto) o arrasto vertical fica pra rolagem; aí move na horizontal ou pelo cabeçalho.
  * Os toques nos botões continuam funcionando (o gesto só é tomado depois que vira arrasto).
  */
-private fun Modifier.dragAnywhere(scroll: ScrollState, onDrag: (Float, Float) -> Unit) = pointerInput(Unit) {
+private fun Modifier.dragAnywhere(scroll: ScrollState, onDrag: (Float, Float) -> Unit, onDragEnd: () -> Unit) = pointerInput(Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         var total = Offset.Zero
@@ -124,6 +126,7 @@ private fun Modifier.dragAnywhere(scroll: ScrollState, onDrag: (Float, Float) ->
             change.consume()
             onDrag(delta.x, delta.y)
         }
+        if (dragging) onDragEnd()
     }
 }
 

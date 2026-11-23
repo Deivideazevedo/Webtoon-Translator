@@ -42,6 +42,24 @@ class SettingsRepository(context: Context) {
         _backClosesBubbles.value = value
     }
 
+    private val _fixedCard = MutableStateFlow(prefs.getBoolean(KEY_FIXED_CARD, false))
+    /** "Balão principal fixo": o cartão flutuante fica sempre no mesmo lugar; só o conteúdo muda. */
+    val fixedCard: StateFlow<Boolean> = _fixedCard.asStateFlow()
+
+    fun setFixedCard(value: Boolean) {
+        prefs.edit { putBoolean(KEY_FIXED_CARD, value) }
+        _fixedCard.value = value
+    }
+
+    /** Onde o cartão estava (x, y e se é contado de baixo), pro "Balão principal fixo". */
+    var cardPosition: Triple<Int, Int, Boolean>?
+        get() = prefs.getString(KEY_CARD_POSITION, null)?.split(',')?.takeIf { it.size == 3 }?.let {
+            Triple(it[0].toIntOrNull() ?: return null, it[1].toIntOrNull() ?: return null, it[2] == "bottom")
+        }
+        set(value) = prefs.edit {
+            putString(KEY_CARD_POSITION, value?.let { "${it.first},${it.second},${if (it.third) "bottom" else "top"}" })
+        }
+
     fun setCardOpacity(value: Float) {
         prefs.edit { putFloat(KEY_CARD_OPACITY, value) }
         _cardOpacity.value = value
@@ -158,6 +176,7 @@ class SettingsRepository(context: Context) {
         _favorites.value = favoritesOf(_current.value.provider)
         _cardOpacity.value = prefs.getFloat(KEY_CARD_OPACITY, DEFAULT_CARD_OPACITY)
         _backClosesBubbles.value = prefs.getBoolean(KEY_BACK_CLOSES, false)
+        _fixedCard.value = prefs.getBoolean(KEY_FIXED_CARD, false)
     }
 
     /** Tom da voz (1.0 = normal). */
@@ -227,6 +246,8 @@ class SettingsRepository(context: Context) {
         val CARD_OPACITY_RANGE = 0.5f..1f
         private const val KEY_CARD_OPACITY = "card_opacity"
         private const val KEY_BACK_CLOSES = "back_closes_bubbles"
+        private const val KEY_FIXED_CARD = "fixed_card"
+        private const val KEY_CARD_POSITION = "card_position"
         private const val KEY_TUTORIAL_SEEN = "tutorial_seen"
         private const val KEY_DESKTOP_EXTRAS = "desktop_extras"
         private const val KEY_BENCHMARK = "benchmark"

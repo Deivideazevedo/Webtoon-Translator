@@ -16,7 +16,7 @@ pub fn speech_texts(t: &TranslationResult) -> Vec<String> {
 /// A pronúncia NÃO vem do modelo: é calculada localmente (pronunciation.rs) a partir do
 /// dicionário do Kokoro — mais consistente e menos tokens de saída pra esperar.
 pub const SYSTEM_PROMPT: &str = "Você é um professor de inglês para falantes de português brasileiro que leem \
-webtoons. Você recebe um texto em inglês extraído por OCR (pode ter ruído: letras soltas, pontuação estranha, \
+webtoons (e outros textos em inglês). Você recebe um texto em inglês extraído por OCR (pode ter ruído: letras soltas, pontuação estranha, \
 palavras levemente erradas). Reconstrua o texto mais provável e responda SOMENTE com JSON válido, sem markdown, \
 nesta ordem exata de campos:\n\
 {\"original_text\": \"...\", \"translation\": \"...\", \"breakdown\": [{\"segment\": \"...\", \"meaning\": \"...\", \
@@ -34,7 +34,7 @@ com \"Literal: … → aqui: …\"; sem especular sobre história ou personagens
 - gloss: tradução literal, palavra por palavra, de CADA palavra de original_text na ordem (sem pontuação), com o \
 sentido que ela tem nesta frase. Contrações viram 1 item (\"let's\" = \"vamos\"). Pode ficar estranho em português, \
 é de propósito.\n\
-- Se não houver inglês legível, retorne original_text e translation vazios e explique em grammar_notes.";
+- Traduza qualquer texto em inglês; só se não houver inglês legível, retorne original_text e translation vazios e explique em grammar_notes.";
 
 /// Teto de segurança contra geração descontrolada. As respostas reais ficam em ~100-700 tokens,
 /// então isso nunca corta uma resposta normal (cortar no meio quebraria o JSON).
@@ -387,7 +387,7 @@ pub async fn stream_translation(
 
 /// Prompt curto do modo tela cheia: só a tradução de cada balão, sem a parte didática (que vem
 /// depois, quando o usuário toca num balão).
-pub const BATCH_PROMPT: &str = "Você traduz balões de webtoon do inglês para o português brasileiro. Você recebe \
+pub const BATCH_PROMPT: &str = "Você traduz textos (geralmente balões de webtoon) do inglês para o português brasileiro. Você recebe \
 uma lista numerada de textos extraídos por OCR (podem ter ruído: letras soltas, palavras levemente erradas). \
 Responda SOMENTE com JSON válido, sem markdown: {\"translations\": [\"...\", \"...\"]}, com exatamente uma \
 tradução por item, na mesma ordem. Português natural e coloquial, preservando gíria, intensidade e tom; sentence \

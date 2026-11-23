@@ -151,6 +151,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
         closeEditor()
         closeSheet()
         hintOverlay?.remove()
+        saveCardPosition()
         cardOverlay?.remove()
         screenBlocks?.remove()
         selection?.remove()
@@ -356,19 +357,34 @@ class FloatingService : Service(), FloatingIcon.Listener {
 
     // --- Cartão ---
 
-    /** Cartão logo abaixo da área (ou acima, se não couber embaixo); dá pra arrastar depois. */
+    /**
+     * Cartão logo abaixo da área (ou acima, se não couber embaixo); dá pra arrastar depois. Com o
+     * "Balão principal fixo", o cartão aberto fica onde está (só o conteúdo muda) e um cartão novo
+     * abre onde o último ficou.
+     */
     private fun showCard(region: Rect) {
+        val fixed = settings.fixedCard.value
+        if (fixed && cardOverlay != null) return
         val screen = screenBounds(this)
-        val below = region.bottom < screen.height() * 0.55
+        val saved = settings.cardPosition.takeIf { fixed }
+        val below = saved?.let { !it.third } ?: (region.bottom < screen.height() * 0.55)
         val params = overlayParams(
             screen.width(),
             ViewGroup.LayoutParams.WRAP_CONTENT,
             gravity = Gravity.START or if (below) Gravity.TOP else Gravity.BOTTOM,
-        ).apply { y = if (below) region.bottom + MARGIN_PX else screen.height() - region.top + MARGIN_PX }
+        ).apply {
+            if (saved != null) {
+                x = saved.first
+                y = saved.second
+            } else {
+                y = if (below) region.bottom + MARGIN_PX else screen.height() - region.top + MARGIN_PX
+            }
+        }
         cardOverlay?.remove()
         cardParams = params
         val controls = FloatingCardControls(
             onDrag = ::dragCard,
+            onDragEnd = ::anchorCard,
             onReselect = if (mode.usesFixedRegion) ::openEditor else null,
             onOptions = ::openOptions,
         )
@@ -379,6 +395,33 @@ class FloatingService : Service(), FloatingIcon.Listener {
                 backCloses = settings.backClosesBubbles,
             )
         }.also { it.show(params) }
+    }
+
+    /**
+     * Soltou o cartão: prende ele na borda mais perto (metade de cima → topo, cresce pra baixo;
+     * metade de baixo → base, cresce pra cima). Com a altura máxima de meia tela, o conteúdo novo
+     * nunca empurra o cartão pra fora da tela.
+     */
+    private fun anchorCard() {
+        val params = cardParams ?: return
+        val rect = cardOverlay?.screenRect() ?: return
+        val screenHeight = screenBounds(this).height()
+        val atBottom = params.gravity and Gravity.BOTTOM == Gravity.BOTTOM
+        val wantBottom = rect.centerY() > screenHeight / 2
+        if (atBottom != wantBottom) {
+            // Mesmo lugar, medido da outra borda.
+            params.y = (screenHeight - params.y - rect.height()).coerceAtLeast(0)
+            params.gravity = Gravity.START or if (wantBottom) Gravity.BOTTOM else Gravity.TOP
+            cardOverlay?.show(params)
+        }
+        saveCardPosition()
+    }
+
+    /** Guarda onde o cartão está, pro "Balão principal fixo" abrir o próximo no mesmo lugar. */
+    private fun saveCardPosition() {
+        val params = cardParams ?: return
+        if (!settings.fixedCard.value) return
+        settings.cardPosition = Triple(params.x, params.y, params.gravity and Gravity.BOTTOM == Gravity.BOTTOM)
     }
 
     private fun dragCard(dx: Float, dy: Float) {
@@ -398,6 +441,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
     }
 
     private fun closeCard() {
+        saveCardPosition()
         closeSheet()
         translationJob?.cancel()
         card.value = null
@@ -473,12 +517,14 @@ class FloatingService : Service(), FloatingIcon.Listener {
                 page = page,
                 mode = settings.mode,
                 backCloses = settings.backClosesBubbles,
+                fixedCard = settings.fixedCard,
                 speed = speed,
                 onSelectMode = { newMode ->
                     hideSheet()
                     if (newMode != mode) selectMode(newMode)
                 },
                 onBackClosesChange = settings::setBackClosesBubbles,
+                onFixedCardChange = settings::setFixedCard,
                 onPage = { page.value = it },
                 onSpeedChange = {
                     speed.value = it

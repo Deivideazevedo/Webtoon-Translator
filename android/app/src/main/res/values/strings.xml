@@ -49,6 +49,8 @@
     <string name="appearance_ipa">Pronúncia em IPA</string>
     <string name="appearance_ipa_desc">Mostra o botão IPA no cartão pra alternar com a pronúncia em português</string>
     <string name="appearance_opacity">Transparência do cartão</string>
+    <string name="appearance_fixed_card">Balão principal fixo</string>
+    <string name="appearance_fixed_card_desc">O cartão da tradução fica sempre no mesmo lugar (onde você deixou); a cada tradução só o conteúdo muda</string>
     <string name="appearance_back_closes">Voltar fecha as traduções</string>
     <string name="appearance_back_closes_desc">Com uma tradução flutuante aberta, o voltar fecha ela (e as da tela cheia) em vez de voltar no app de baixo</string>
     <string name="appearance_opacity_desc">Fundo do cartão de tradução flutuante; mais transparente deixa ver a arte do webtoon</string>
@@ -210,6 +212,7 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
 
     <!-- Erros e avisos -->
     <string name="error_not_configured">Configure a chave de API e o modelo em ⚙ Configurações.</string>
+    <string name="error_no_english">Não encontrei texto em inglês pra traduzir nessa área.</string>
     <string name="error_no_text">Não encontrei texto nessa área. Tente pegar o balão inteiro.</string>
     <string name="error_no_text_screen">Não encontrei balões com texto nesta tela.</string>
     <string name="error_translate_failed">Não consegui traduzir agora.</string>

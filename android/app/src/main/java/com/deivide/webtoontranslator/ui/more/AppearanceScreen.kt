@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Opacity
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +65,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
     val theme by settings.theme.collectAsStateWithLifecycle()
     val opacity by settings.cardOpacity.collectAsStateWithLifecycle()
     val backCloses by settings.backClosesBubbles.collectAsStateWithLifecycle()
+    val fixedCard by settings.fixedCard.collectAsStateWithLifecycle()
     val options by reading.options.collectAsStateWithLifecycle()
     var choosingTheme by rememberSaveable { mutableStateOf(false) }
     val icons = AppTheme.colors.icons
@@ -112,6 +114,15 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     divider = true,
                     onClick = { settings.setBackClosesBubbles(!backCloses) },
                     trailing = { Switch(checked = backCloses, onCheckedChange = settings::setBackClosesBubbles) },
+                )
+                SettingRow(
+                    icon = Icons.Filled.PictureInPicture,
+                    color = icons.purple,
+                    title = stringResource(R.string.appearance_fixed_card),
+                    subtitle = stringResource(R.string.appearance_fixed_card_desc),
+                    divider = true,
+                    onClick = { settings.setFixedCard(!fixedCard) },
+                    trailing = { Switch(checked = fixedCard, onCheckedChange = settings::setFixedCard) },
                 )
                 HorizontalDivider(Modifier.padding(start = 72.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {

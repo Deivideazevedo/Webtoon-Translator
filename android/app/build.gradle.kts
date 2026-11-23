@@ -14,8 +14,8 @@ android {
         applicationId = "com.deivide.webtoontranslator"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.2.0"
+        versionCode = 2
+        versionName = "0.2.1"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -36,7 +36,15 @@ android {
     }
 
     buildTypes {
+        // Versão de desenvolvimento (make android): outro app, "Webtoon Translator (dev)", instalado ao
+        // lado do oficial (que vem do GitHub, assinado com outra chave e não aceita esta por cima).
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            manifestPlaceholders["appLabel"] = "Webtoon Translator (dev)"
+        }
         release {
+            manifestPlaceholders["appLabel"] = "Webtoon Translator"
             // R8: tira o código e os recursos que o app não usa (ex.: os milhares de ícones do
             // Material que vêm no pacote) e otimiza o resto. Regras de quem usa reflexão em proguard-rules.pro.
             isMinifyEnabled = true
@@ -51,6 +59,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG: diagnóstico que só existe na versão (dev).
+        buildConfig = true
     }
 }
 

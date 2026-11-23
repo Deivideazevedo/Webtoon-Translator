@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -63,9 +64,11 @@ internal fun FloatingOptionsSheet(
     page: StateFlow<OptionsPage>,
     mode: StateFlow<TranslationMode>,
     backCloses: StateFlow<Boolean>,
+    fixedCard: StateFlow<Boolean>,
     speed: StateFlow<Float>,
     onSelectMode: (TranslationMode) -> Unit,
     onBackClosesChange: (Boolean) -> Unit,
+    onFixedCardChange: (Boolean) -> Unit,
     onPage: (OptionsPage) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onSpeedPreview: () -> Unit,
@@ -74,6 +77,7 @@ internal fun FloatingOptionsSheet(
     val currentPage by page.collectAsStateWithLifecycle()
     val currentMode by mode.collectAsStateWithLifecycle()
     val closes by backCloses.collectAsStateWithLifecycle()
+    val fixed by fixedCard.collectAsStateWithLifecycle()
     val currentSpeed by speed.collectAsStateWithLifecycle()
 
     when (currentPage) {
@@ -86,6 +90,11 @@ internal fun FloatingOptionsSheet(
                 onClick = { onBackClosesChange(!closes) },
                 icon = Icons.AutoMirrored.Filled.ArrowBack, iconColor = AppTheme.colors.icons.green, compact = true,
             ) { SmallSwitch(closes, onBackClosesChange) }
+            OptionItem(
+                stringResource(R.string.appearance_fixed_card), selected = false,
+                onClick = { onFixedCardChange(!fixed) },
+                icon = Icons.Filled.PictureInPicture, iconColor = AppTheme.colors.icons.purple, compact = true,
+            ) { SmallSwitch(fixed, onFixedCardChange) }
             OptionItem(
                 stringResource(R.string.options_speech_speed), selected = false,
                 onClick = { onPage(OptionsPage.SPEED) },

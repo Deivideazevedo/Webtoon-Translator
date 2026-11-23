@@ -58,6 +58,7 @@ class BackupRepository(
         json.put("speech_speed", AppSettings.nativeRate(current.speechSpeed).toDouble())
         json.put("bubble_opacity", settings.cardOpacity.value.toDouble())
         json.put("back_closes_bubbles", settings.backClosesBubbles.value)
+        json.put("fixed_card", settings.fixedCard.value)
         val favorites = JSONObject()
         Provider.entries.forEach { p -> favorites.put(p.id, JSONArray(settings.favoritesOf(p))) }
         json.put("favorites", favorites)
@@ -77,6 +78,7 @@ class BackupRepository(
         }
         if (json.has("bubble_opacity")) settings.setCardOpacity(json.getDouble("bubble_opacity").toFloat())
         if (json.has("back_closes_bubbles")) settings.setBackClosesBubbles(json.getBoolean("back_closes_bubbles"))
+        if (json.has("fixed_card")) settings.setFixedCard(json.getBoolean("fixed_card"))
         // Favoritos: soma os do backup aos daqui (como o desktop faz), sem repetir.
         json.optJSONObject("favorites")?.let { favorites ->
             Provider.entries.forEach { p ->

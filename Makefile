@@ -12,7 +12,8 @@ export JAVA_HOME
 
 ADB := adb $(if $(ADB_SERIAL),-s $(ADB_SERIAL))
 APK := android/app/build/outputs/apk/debug/app-debug.apk
-APP_ID := com.deivide.webtoontranslator
+# Versão de desenvolvimento: outro app ("Webtoon Translator (dev)"), ao lado do oficial.
+APP_ID := com.deivide.webtoontranslator.dev
 
 .DEFAULT_GOAL := help
 .PHONY: help dev appimage test apk android
@@ -36,4 +37,4 @@ apk: ## Gera o APK do Android (inclui compilar o Rust pra Android)
 
 android: apk ## Gera o APK, instala no celular conectado (adb) e abre o app
 	$(ADB) install -r $(APK)
-	$(ADB) shell am start -n $(APP_ID)/.MainActivity
+	$(ADB) shell am start -n $(APP_ID)/com.deivide.webtoontranslator.MainActivity

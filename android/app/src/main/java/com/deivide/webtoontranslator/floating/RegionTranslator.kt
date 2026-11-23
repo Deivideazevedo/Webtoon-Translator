@@ -1,6 +1,8 @@
 package com.deivide.webtoontranslator.floating
 
 import android.graphics.Bitmap
+import android.util.Log
+import com.deivide.webtoontranslator.BuildConfig
 import com.deivide.webtoontranslator.R
 import com.deivide.webtoontranslator.data.diagnostics.ErrorLog
 import com.deivide.webtoontranslator.data.library.LibraryRepository
@@ -59,7 +61,24 @@ class RegionTranslator(
             var card: TranslationCardState? = TranslationCardState.Streaming(original = text)
             emit(card!!)
             try {
+                if (BuildConfig.DEBUG) Log.d(DEV_TAG, "OCR leu: \"$text\"")
                 translations.translate(text, current).collect { event ->
+                    if (BuildConfig.DEBUG && event is TranslationEvent.Done) {
+                        val t = event.translation
+                        Log.d(DEV_TAG, "IA: original=\"${t.originalText}\" tradução=\"${t.translation}\" notas=\"${t.grammarNotes}\"")
+                    }
+                    // O modelo não achou inglês pra traduzir (área com outro idioma, ruído…) e explica o
+                    // motivo em grammar_notes: mostra o motivo em vez de um cartão vazio, sem salvar nos recentes.
+                    if (event is TranslationEvent.Done && event.translation.translation.isBlank()) {
+                        val reason = event.translation.grammarNotes.trim()
+                        emit(
+                            TranslationCardState.Failed(
+                                if (reason.isNotEmpty()) UiText.Raw(reason) else UiText.Resource(R.string.error_no_english),
+                                retryable = true,
+                            )
+                        )
+                        return@collect
+                    }
                     card = card.apply(event)
                     card?.let { emit(it) }
                     if (event is TranslationEvent.Done) library.addRecent(event.translation)
@@ -77,5 +96,7 @@ class RegionTranslator(
     private companion object {
         /** Primeira tentativa + uma automática. */
         const val ATTEMPTS = 2
+        /** Diagnóstico da versão (dev): `adb logcat -s WT-Dev`. */
+        const val DEV_TAG = "WT-Dev"
     }
 }

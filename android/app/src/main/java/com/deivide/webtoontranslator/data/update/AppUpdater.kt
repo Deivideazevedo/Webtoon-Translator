@@ -2,6 +2,7 @@ package com.deivide.webtoontranslator.data.update
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.runtime.getValue
@@ -47,13 +48,16 @@ class AppUpdater(private val context: Context) {
     private var job: Job? = null
     private var checked = false
 
+    private val isDevBuild = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+
     val currentVersion: String = runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName
     }.getOrNull().orEmpty()
 
     /** Confere uma vez por abertura do app ([force]: botão "Procurar atualizações"). */
     fun check(force: Boolean = false) {
-        if ((checked && !force) || job?.isActive == true) return
+        // A versão de desenvolvimento é outro app: o APK do GitHub não a atualizaria.
+        if (isDevBuild || (checked && !force) || job?.isActive == true) return
         checked = true
         job = scope.launch {
             if (force) _state.value = State.Checking
