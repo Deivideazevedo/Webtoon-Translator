@@ -99,13 +99,14 @@ private fun HistoryCard(
                 Checkbox(checked = selected, onCheckedChange = { onClick() })
             }
             Column(Modifier.weight(1f).padding(top = 8.dp, start = if (selecting) 0.dp else 4.dp)) {
-                Text(translation.originalText, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 15.sp)
+                // Mesmo padrão da "Última tradução" (tela Inicial): a tradução em destaque, o inglês embaixo.
+                Text(translation.translation, maxLines = 3, overflow = TextOverflow.Ellipsis, fontSize = 17.sp)
                 Text(
-                    translation.translation,
-                    maxLines = 3,
+                    translation.originalText,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 Row(Modifier.padding(top = 6.dp)) {

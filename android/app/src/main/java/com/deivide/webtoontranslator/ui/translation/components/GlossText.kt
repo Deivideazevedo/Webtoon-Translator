@@ -37,6 +37,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.deivide.webtoontranslator.domain.model.Gloss
 import kotlin.math.roundToInt
@@ -172,6 +173,8 @@ fun GlossText(
         text,
         color = color,
         fontSize = fontSize,
+        // Mais espaço que o texto comum: o pontilhado embaixo das palavras precisa dele.
+        lineHeight = 1.6.em,
         onTextLayout = { layout = it },
         modifier = modifier
             .onGloballyPositioned {

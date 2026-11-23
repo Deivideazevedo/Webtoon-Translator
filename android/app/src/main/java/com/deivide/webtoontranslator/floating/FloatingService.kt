@@ -139,10 +139,12 @@ class FloatingService : Service(), FloatingIcon.Listener {
         // A opção pode mudar com o cartão aberto (⚙ do cartão ou Mais → Aparência).
         scope.launch { settings.backClosesBubbles.collect { cardOverlay?.setOnBack(backClosesBubbles()) } }
         container.floatingStatus.set(true)
+        FloatingWidget.refresh(this, running = true)
     }
 
     override fun onDestroy() {
         container.floatingStatus.set(false)
+        FloatingWidget.refresh(this, running = false)
         translationJob?.cancel()
         scope.cancel()
         closeMenu()

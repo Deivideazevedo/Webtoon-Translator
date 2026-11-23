@@ -7,6 +7,11 @@
 # O APK é assinado com a chave dos secrets ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD /
 # ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD: sempre a mesma, senão o Android não instala a atualização por cima.
 name: Release
+# Nome de cada execução na aba Actions: o release de verdade ou só a compilação de cache do main.
+run-name: >-
+  ${{ github.ref_type == 'tag' && format('Release {0}', github.ref_name)
+  || github.event_name == 'workflow_dispatch' && format('Release {0} (gerado de novo)', inputs.tag)
+  || format('Cache ({0})', github.ref_name) }}
 
 on:
   push:

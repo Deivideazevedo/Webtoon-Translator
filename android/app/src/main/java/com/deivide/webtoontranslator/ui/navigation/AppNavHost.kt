@@ -1,5 +1,6 @@
 package com.deivide.webtoontranslator.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -26,14 +29,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -54,12 +56,14 @@ import com.deivide.webtoontranslator.ui.more.TutorialScreen
 import com.deivide.webtoontranslator.ui.theme.AppTheme
 import com.deivide.webtoontranslator.ui.translations.TranslationsScreen
 import com.deivide.webtoontranslator.ui.voice.VoiceScreen
+import kotlinx.coroutines.launch
 
-/** Telas do app. As 3 abas ficam na navegação de baixo; as de detalhe empilham por cima. */
+/**
+ * Telas do app. As 3 abas (Inicial, Traduções, Mais) ficam juntas numa tela só, lado a lado, e
+ * as de detalhe empilham por cima.
+ */
 object Routes {
-    const val HOME = "home"
-    const val TRANSLATIONS = "translations"
-    const val MORE = "more"
+    const val TABS = "tabs"
     const val CONNECTION = "connection"
     const val VOICE = "voice"
     const val APPEARANCE = "appearance"
@@ -71,10 +75,10 @@ object Routes {
     const val TUTORIAL = "tutorial"
 }
 
-private enum class Tab(val route: String, val icon: ImageVector, val label: Int) {
-    HOME(Routes.HOME, Icons.Filled.Home, R.string.tab_home),
-    TRANSLATIONS(Routes.TRANSLATIONS, Icons.Filled.Translate, R.string.tab_translations),
-    MORE(Routes.MORE, Icons.Filled.MoreHoriz, R.string.tab_more),
+private enum class Tab(val icon: ImageVector, val label: Int) {
+    HOME(Icons.Filled.Home, R.string.tab_home),
+    TRANSLATIONS(Icons.Filled.Translate, R.string.tab_translations),
+    MORE(Icons.Filled.MoreHoriz, R.string.tab_more),
 }
 
 @Composable
@@ -83,7 +87,9 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
     val route = entry?.destination?.route
     val openConnection = { navController.navigate(Routes.CONNECTION) }
     val back: () -> Unit = { navController.popBackStack() }
-    val tabs = Tab.entries.map { it.route }
+    // As abas: arrastar pros lados troca de aba (e a barra de baixo acompanha).
+    val pager = rememberPagerState { Tab.entries.size }
+    val scope = rememberCoroutineScope()
     // Primeira abertura: o tutorial abre por cima da Inicial (fechar volta pra ela).
     val settings = (LocalContext.current.applicationContext as WebtoonApp).container.settingsRepository
     LaunchedEffect(Unit) {
@@ -96,28 +102,15 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             // Abrir tela de detalhe desliza pra esquerda (a nova entra pela direita) e voltar desliza
-            // pra direita; trocar de aba só faz um fade, como no padrão do Android. O gesto de
-            // voltar arrastando da borda (voltar preditivo) usa o mesmo deslizar, acompanhando o
-            // dedo (o padrão da biblioteca seria encolher a tela).
+            // pra direita. O gesto de voltar arrastando da borda (voltar preditivo) usa o mesmo
+            // deslizar, acompanhando o dedo (o padrão da biblioteca seria encolher a tela).
             NavHost(
                 navController,
-                startDestination = Routes.HOME,
-                enterTransition = {
-                    if (isTabSwitch(tabs)) fadeIn(tween(TAB_FADE_MS))
-                    else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(SLIDE_MS))
-                },
-                exitTransition = {
-                    if (isTabSwitch(tabs)) fadeOut(tween(TAB_FADE_MS))
-                    else slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(SLIDE_MS))
-                },
-                popEnterTransition = {
-                    if (isTabSwitch(tabs)) fadeIn(tween(TAB_FADE_MS))
-                    else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(SLIDE_MS))
-                },
-                popExitTransition = {
-                    if (isTabSwitch(tabs)) fadeOut(tween(TAB_FADE_MS))
-                    else slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(SLIDE_MS))
-                },
+                startDestination = Routes.TABS,
+                enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(SLIDE_MS)) },
+                exitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(SLIDE_MS)) },
+                popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(SLIDE_MS)) },
+                popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(SLIDE_MS)) },
                 predictivePopEnterTransition = {
                     slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(SLIDE_MS))
                 },
@@ -125,9 +118,19 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
                     slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(SLIDE_MS))
                 },
             ) {
-                composable(Routes.HOME) { HomeScreen(onOpenConnection = openConnection) }
-                composable(Routes.TRANSLATIONS) { TranslationsScreen() }
-                composable(Routes.MORE) { MoreScreen(onOpen = { navController.navigate(it) }) }
+                composable(Routes.TABS) {
+                    // Voltar numa aba que não é a Inicial volta pra Inicial (e só daí sai do app).
+                    BackHandler(enabled = pager.currentPage != Tab.HOME.ordinal) {
+                        scope.launch { pager.animateScrollToPage(Tab.HOME.ordinal) }
+                    }
+                    HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+                        when (Tab.entries[page]) {
+                            Tab.HOME -> HomeScreen(onOpenConnection = openConnection)
+                            Tab.TRANSLATIONS -> TranslationsScreen()
+                            Tab.MORE -> MoreScreen(onOpen = { navController.navigate(it) })
+                        }
+                    }
+                }
                 composable(Routes.CONNECTION) { ConnectionScreen(onBack = back) }
                 composable(Routes.VOICE) { VoiceScreen(onBack = back) }
                 composable(Routes.APPEARANCE) { AppearanceScreen(onBack = back) }
@@ -142,30 +145,21 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
         // A barra de baixo só aparece nas 3 abas; telas de detalhe ocupam a tela toda. Entra e sai
         // deslizando, junto com a transição das telas.
         AnimatedVisibility(
-            visible = route == null || route in tabs,
+            visible = route == null || route == Routes.TABS,
             enter = expandVertically(tween(SLIDE_MS)) + fadeIn(tween(SLIDE_MS)),
             exit = shrinkVertically(tween(SLIDE_MS)) + fadeOut(tween(SLIDE_MS)),
         ) {
-            BottomBar(route) { tab ->
-                navController.navigate(tab.route) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
+            BottomBar(selected = Tab.entries[pager.targetPage]) { tab ->
+                scope.launch { pager.animateScrollToPage(tab.ordinal) }
             }
         }
     }
 }
 
 private const val SLIDE_MS = 300
-private const val TAB_FADE_MS = 180
-
-/** Troca entre duas abas de baixo (não é abrir/voltar de uma tela de detalhe). */
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.isTabSwitch(tabs: List<String>) =
-    initialState.destination.route in tabs && targetState.destination.route in tabs
 
 @Composable
-private fun BottomBar(route: String?, onSelect: (Tab) -> Unit) {
+private fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit) {
     Column {
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         NavigationBar(
@@ -176,7 +170,7 @@ private fun BottomBar(route: String?, onSelect: (Tab) -> Unit) {
         ) {
             Tab.entries.forEach { tab ->
                 NavigationBarItem(
-                    selected = route == tab.route,
+                    selected = tab == selected,
                     onClick = { onSelect(tab) },
                     icon = { Icon(tab.icon, contentDescription = null) },
                     label = { Text(stringResource(tab.label)) },

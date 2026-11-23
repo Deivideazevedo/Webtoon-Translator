@@ -120,7 +120,7 @@ cortar a barra de status. O Translate On Screen não faz isso e traduz o própri
 | 33 | Personalizar o ícone flutuante: tamanho, transparência, cor 💡 | ⬜ |
 | 34 | Ações configuráveis no toque duplo e no toque longo do ícone 💡 | ⬜ |
 | 35 | Tutorial curto na primeira abertura (e no menu "?") 💡 | ✅ (Android: abre na primeira vez e em Mais → Tutorial) |
-| 36 | Atalho no painel rápido do Android (Quick Settings tile) pra ligar/desligar 💡 | ⬜ |
+| 36 | Atalho no painel rápido do Android (Quick Settings tile) pra ligar/desligar 💡 | ✅ (atalho no painel rápido e widget 2×1 na tela inicial) |
 
 ### Prioridade 4 — extras
 

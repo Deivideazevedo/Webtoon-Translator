@@ -140,10 +140,10 @@ fun HomeScreen(
                 SectionCard(Modifier.clickable { sheet = Sheet.LAST }) {
                     Row(verticalAlignment = Alignment.Top) {
                         Column(Modifier.weight(1f)) {
-                            Text(last.translation, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(last.translation, fontSize = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Text(
                                 last.originalText,
-                                fontSize = 14.sp,
+                                fontSize = 15.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,

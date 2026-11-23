@@ -33,6 +33,39 @@
             </intent-filter>
         </activity>
 
+        <!-- Widget da tela inicial: liga/desliga o tradutor flutuante. -->
+        <receiver
+            android:name=".floating.FloatingWidget"
+            android:exported="false"
+            android:label="@string/widget_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/floating_widget_info" />
+        </receiver>
+
+        <!-- Atalho no painel rápido: liga/desliga o tradutor flutuante. -->
+        <service
+            android:name=".floating.FloatingTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_power"
+            android:label="@string/widget_title"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Tela invisível do widget e do atalho (pede a captura da tela e some). -->
+        <activity
+            android:name=".floating.FloatingToggleActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updates"

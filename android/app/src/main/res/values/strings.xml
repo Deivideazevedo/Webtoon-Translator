@@ -260,4 +260,11 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
     <string name="update_check_desc">Confere se há uma versão mais nova no GitHub</string>
     <string name="update_checking">Procurando…</string>
     <string name="update_up_to_date">Você está na versão mais nova</string>
+
+    <!-- Widget -->
+    <string name="widget_title">Tradutor flutuante</string>
+    <string name="widget_short_title">Tradutor</string>
+    <string name="widget_on">Ligado</string>
+    <string name="widget_off">Desligado</string>
+    <string name="widget_description">Liga e desliga o tradutor flutuante direto da tela inicial</string>
 </resources>

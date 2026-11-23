@@ -221,7 +221,7 @@ private fun TextBlock(
                 modifier = Modifier.padding(top = 6.dp),
                 onSpeakWord = { actions.onSpeak(it, false) },
             )
-            Pronunciation(pt, ipa, options)
+            Pronunciation(pt, ipa, options, Modifier.padding(top = 4.dp))
         }
     }
 }

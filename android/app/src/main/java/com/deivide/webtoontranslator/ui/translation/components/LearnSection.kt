@@ -100,13 +100,14 @@ private fun SegmentItem(
         SpeakButtons(segment.text, actions.onSpeak)
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
             GlossText(segment.text, gloss, fontSize = 15.sp, onSpeakWord = { actions.onSpeak(it, false) })
-            Pronunciation(segment.pronunciationPt, segment.pronunciationIpa, options)
+            Pronunciation(segment.pronunciationPt, segment.pronunciationIpa, options, Modifier.padding(top = 4.dp))
             Text(
                 segment.meaning,
                 fontSize = 15.sp,
                 lineHeight = 19.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 4.dp),
             )
             if (segment.note.isNotBlank()) SegmentNote(segment.note)
         }
