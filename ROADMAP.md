@@ -13,7 +13,7 @@ Legenda: ⬜ a fazer · 🟨 em andamento · ✅ feito · ➖ descartado ou abso
 
 | # | Item | Status |
 |---|---|---|
-| M1 | **Cartão flutuante novo**: escuro translúcido, arrastável, cabeçalho só com ícones iguais (🔊 🐢 📋 ★ IPA 📖 · ⌗ ✕) | 🟨 (feito; falta a opacidade configurável) |
+| M1 | **Cartão flutuante novo**: escuro translúcido, arrastável, cabeçalho só com ícones iguais (🔊 🐢 📋 ★ IPA 📖 · ⌗ ✕) | ✅ (opacidade em Mais → Aparência, item 15) |
 | M2 | **Seletor de modo** (menu do ícone e tela Inicial) | ✅ |
 | M3 | **Região** no cartão novo | ✅ |
 | M4 | **Região fixa**: área com alças nos cantos e ✓/✗; toque no ícone traduz de novo; ⌗ redefine (absorve o item 31) | ✅ |
@@ -33,7 +33,7 @@ resto: as próximas telas já nascem no padrão novo.
 | L1 | **Tema claro e escuro** com as cores do LAYOUT.md (neutros + azul), seguindo o sistema; opção Automático / Claro / Escuro | ✅ |
 | L2 | **Componentes padrão**: barra do topo fixa, navegação inferior, cartão de seção, título de seção, `IconTile` (quadrado/redondo, cor em transparência + ícone sólido), linha de configuração, seletor ▾, bottom sheet de opções, abas em pílula | ✅ |
 | L3 | **Navegação inferior: Inicial \| Traduções \| Mais** | ✅ |
-| L4 | **Inicial**: cartão com botão grande + pílula de status + seletores **Modelo de IA** e **Modo de tradução** (bottom sheets); última tradução; personalizar ícone | 🟨 (cartão de controle, seletores de modelo ★ e de modo, última tradução; falta "personalizar ícone") |
+| L4 | **Inicial**: cartão com botão grande + pílula de status + seletores **Modelo de IA** e **Modo de tradução** (bottom sheets); última tradução; personalizar ícone | ✅ (cartão de controle, seletores de modelo ★ e de modo, última tradução; "personalizar ícone" descartado) |
 | L5 | **Traduções**: traduzir texto digitado/colado (absorve o item 37) + Recentes/Favoritos | ✅ |
 | L6 | **Mais**: Conexão, Voz, Aparência, Acesso rápido · Dados (Backup, Armazenamento) · Suporte (Tutorial, App fechando sozinho, Sobre e licenças) | ✅ |
 | L7 | **Voz**: voz do Android (escolher entre as instaladas), **tom** e velocidade, ouvir exemplo — tudo nativo, sem gerar áudio | ✅ (voz instalada, tom, velocidade, ouvir exemplo) |
