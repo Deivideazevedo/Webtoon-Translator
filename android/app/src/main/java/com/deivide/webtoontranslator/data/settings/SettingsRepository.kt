@@ -78,6 +78,7 @@ class SettingsRepository(context: Context) {
         })
         prefs.edit { putString(provider.key(KEY_BENCHMARK), json.toString()) }
         _benchmarks.value = _benchmarks.value + (provider to saved)
+        if (provider == _current.value.provider) _favorites.value = favoritesOf(provider)
     }
 
     private fun readBenchmark(provider: Provider): SavedBenchmark? = runCatching {
@@ -98,7 +99,7 @@ class SettingsRepository(context: Context) {
     }.getOrNull()
 
     private val _favorites = MutableStateFlow(favoritesOf(_current.value.provider))
-    /** Modelos favoritos (★) do provedor em uso, na ordem em que foram marcados. */
+    /** Modelos favoritos (★) do provedor em uso, do mais rápido pro mais lento ([favoritesOf]). */
     val favoriteModels: StateFlow<List<String>> = _favorites.asStateFlow()
 
     /** Configurações do provedor em uso. */
@@ -137,13 +138,13 @@ class SettingsRepository(context: Context) {
         val list = favoritesOf(provider).toMutableList()
         if (!list.remove(model)) list.add(model)
         prefs.edit { putString(provider.key(KEY_FAVORITES), list.joinToString("\n")) }
-        if (provider == _current.value.provider) _favorites.value = list
+        if (provider == _current.value.provider) _favorites.value = favoritesOf(provider)
     }
 
     /** Troca os favoritos de um provedor (resultado do benchmark), do mais rápido pro mais lento. */
     fun setFavoriteModels(provider: Provider, models: List<String>) {
         prefs.edit { putString(provider.key(KEY_FAVORITES), models.joinToString("\n")) }
-        if (provider == _current.value.provider) _favorites.value = models
+        if (provider == _current.value.provider) _favorites.value = favoritesOf(provider)
     }
 
     // --- Usado pelo backup (data/backup), que lê/grava todos os provedores de uma vez ---
@@ -206,8 +207,12 @@ class SettingsRepository(context: Context) {
         else -> AppSettings.DEFAULT_SPEECH_SPEED
     }
 
-    fun favoritesOf(provider: Provider): List<String> =
-        prefs.getString(provider.key(KEY_FAVORITES), null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+    /** Favoritos do provedor, do mais rápido pro mais lento no último benchmark (sem tempo = no fim). */
+    fun favoritesOf(provider: Provider): List<String> {
+        val list = prefs.getString(provider.key(KEY_FAVORITES), null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+        val speeds = _benchmarks.value[provider]?.speeds.orEmpty()
+        return list.sortedBy { speeds[it] ?: Double.MAX_VALUE }
+    }
 
     var translationMode: TranslationMode
         get() = _mode.value

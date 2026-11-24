@@ -8,12 +8,14 @@ import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionConfig
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -22,10 +24,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
+import com.deivide.webtoontranslator.BuildConfig
 import com.deivide.webtoontranslator.MainActivity
 import com.deivide.webtoontranslator.R
 import com.deivide.webtoontranslator.WebtoonApp
 import com.deivide.webtoontranslator.data.settings.TranslationMode
+import com.deivide.webtoontranslator.data.translation.TranslationRepository
 import com.deivide.webtoontranslator.domain.model.ScreenBlock
 import com.deivide.webtoontranslator.domain.model.Translation
 import com.deivide.webtoontranslator.ui.common.ModelListLoader
@@ -88,6 +92,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
             onClose = ::closeCard,
             onRetry = { lastRun?.invoke() },
             onPickModel = ::openModelPicker,
+            onTypeText = ::openTypeText,
         )
     }
 
@@ -125,6 +130,15 @@ class FloatingService : Service(), FloatingIcon.Listener {
         projection.registerCallback(object : MediaProjection.Callback() {
             // Parou pelo sistema (ex.: "parar compartilhamento" na barra de status).
             override fun onStop() = stopSelf()
+
+            // Diagnóstico (dev): no modo "um app só", o tamanho e a visibilidade do que é capturado.
+            override fun onCapturedContentResize(width: Int, height: Int) {
+                if (BuildConfig.DEBUG) Log.d(DEV_TAG, "captura: conteúdo ${width}x$height")
+            }
+
+            override fun onCapturedContentVisibilityChanged(isVisible: Boolean) {
+                if (BuildConfig.DEBUG) Log.d(DEV_TAG, "captura: conteúdo visível=$isVisible")
+            }
         }, mainHandler)
         capturer = ScreenCapturer(this, projection)
         selection = SelectionOverlay(this, windows)
@@ -165,6 +179,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
 
     /**
      * Região fixa: traduz a área marcada (ou abre o editor se ainda não há área).
+     * Região automática: mostra a área (o ✓ traduz); tocar de novo fecha, como o ✕.
      * Tela cheia: traduz a tela; se as traduções já estão na tela, tira elas.
      */
     override fun onTap() {
@@ -172,6 +187,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
         when (mode) {
             TranslationMode.FULL_SCREEN, TranslationMode.AUTO_FULL_SCREEN ->
                 if (screenBlocks?.isShown == true) screenBlocks?.remove() else translateFullScreen()
+            TranslationMode.AUTO_REGION -> if (editor != null) closeEditor() else openEditor()
             else -> {
                 val region = settings.fixedRegion
                 if (region == null || reviewFixedRegion) openEditor() else translateRegion(region)
@@ -247,6 +263,7 @@ class FloatingService : Service(), FloatingIcon.Listener {
         translationJob = scope.launch {
             val shot = captureWithoutOverlays() ?: return@launch
             val crop = crop(shot, region) ?: return@launch
+            if (BuildConfig.DEBUG) Log.d(DEV_TAG, "região $region de uma tela ${shot.width}x${shot.height}")
             showCard(region)
             // "Tentar de novo" reaproveita a mesma captura (a página pode já ter rolado).
             lastRun = { runOnCard { container.regionTranslator.translate(crop) } }
@@ -345,8 +362,13 @@ class FloatingService : Service(), FloatingIcon.Listener {
     private suspend fun captureWithout(hide: List<(Boolean) -> Unit>, mask: List<Rect>): Bitmap? {
         val capturer = capturer ?: return null
         hide.forEach { it(true) }
+        // Logo depois de fechar o editor, o quadro guardado ainda tem ele por cima do balão.
+        val editorJustClosed = SystemClock.uptimeMillis() - editorClosedAt < FRESH_FRAME_MS
+        if (BuildConfig.DEBUG) {
+            Log.d(DEV_TAG, "captura: esconde=${hide.size} editorRecemFechado=$editorJustClosed máscaras=$mask")
+        }
         return try {
-            capturer.capture(waitForNewFrame = hide.isNotEmpty(), mask = mask)
+            capturer.capture(waitForNewFrame = hide.isNotEmpty() || editorJustClosed, mask = mask)
         } catch (e: Exception) {
             card.value = TranslationCardState.Failed(e.toUiText())
             null
@@ -456,13 +478,24 @@ class FloatingService : Service(), FloatingIcon.Listener {
      * Abre um bottom sheet (janela da tela toda, por cima de tudo); só um por vez. [onBack]: o
      * que o voltar faz (padrão: fechar o sheet).
      */
-    private fun openSheet(onBack: () -> Unit = ::hideSheet, content: @Composable (bottomInset: Dp) -> Unit) {
+    private fun openSheet(
+        onBack: () -> Unit = ::hideSheet,
+        keyboard: Boolean = false,
+        /** Só a faixa de baixo (sheet não modal); senão a tela inteira. */
+        bottomOnly: Boolean = false,
+        content: @Composable (bottomInset: Dp) -> Unit,
+    ) {
         if (sheet != null) return
         val screen = screenBounds(this)
+        val params = if (bottomOnly) {
+            overlayParams(screen.width(), WindowManager.LayoutParams.WRAP_CONTENT, gravity = Gravity.BOTTOM)
+        } else {
+            overlayParams(screen.width(), screen.height())
+        }
         val bottomInset = (systemBarHeights(this).second / resources.displayMetrics.density).dp
         sheetOpen.value = true
-        sheet = ComposeOverlay(this, windows, backHandler = onBack) { content(bottomInset) }
-            .also { it.show(overlayParams(screen.width(), screen.height())) }
+        sheet = ComposeOverlay(this, windows, backHandler = onBack, keyboard = keyboard) { content(bottomInset) }
+            .also { it.show(params) }
     }
 
     /** Desce o sheet (animação) e tira a janela em seguida. */
@@ -501,6 +534,23 @@ class FloatingService : Service(), FloatingIcon.Listener {
                     retranslate()
                 },
                 onToggleFavorite = { settings.toggleFavoriteModel(it) },
+                onClose = ::hideSheet,
+            )
+        }
+    }
+
+    /** "Digitar o texto" (OCR inseguro): o texto corrigido é traduzido no mesmo cartão. */
+    private fun openTypeText(draft: String) {
+        openSheet(keyboard = true, bottomOnly = true) { bottomInset ->
+            FloatingTypeSheet(
+                open = sheetOpen,
+                bottomInset = bottomInset,
+                draft = draft,
+                onTranslate = { text ->
+                    hideSheet()
+                    lastRun = { runOnCard { container.regionTranslator.translateText(text) } }
+                    runOnCard { container.regionTranslator.translateText(text) }
+                },
                 onClose = ::hideSheet,
             )
         }
@@ -654,11 +704,11 @@ class FloatingService : Service(), FloatingIcon.Listener {
     private fun autoTranslateRegion(region: Rect) {
         autoJob = scope.launch {
             val first = readArea(region) ?: return@launch
-            if (AutoText.same(AutoText.normalize(lastAutoText), AutoText.normalize(first))) return@launch
-            translateAuto(region, first)
+            if (AutoText.same(AutoText.normalize(lastAutoText), AutoText.normalize(first.text))) return@launch
+            translateAuto(region, first.text, first.unsureDraft)
             delay(STABLE_RECHECK_MS)
             val again = readArea(region) ?: return@launch
-            if (AutoText.same(AutoText.normalize(first), AutoText.normalize(again))) return@launch
+            if (AutoText.same(AutoText.normalize(first.text), AutoText.normalize(again.text))) return@launch
             // Só cancela se a tela ainda está mudando (aí a vigia traduz o texto completo); com a
             // tela parada, a diferença é variação do OCR e a tradução continua.
             if (autoPendingSince != 0L) {
@@ -669,28 +719,29 @@ class FloatingService : Service(), FloatingIcon.Listener {
     }
 
     /** Mostra o texto lido no cartão: do cache ou pedindo à IA. */
-    private fun translateAuto(region: Rect, text: String) {
+    private fun translateAuto(region: Rect, text: String, unsureDraft: String?) {
         lastAutoText = text
         if (cardOverlay == null) showCard(region)
         lastRun = { runOnCard { container.regionTranslator.translateText(text) } }
         val key = AutoText.normalize(text)
         AutoText.find(autoCards, key)?.let {
             translationJob?.cancel()
-            card.value = TranslationCardState.Done(it)
+            card.value = TranslationCardState.Done(it, unsureDraft)
             return
         }
         runOnCard {
-            container.regionTranslator.translateText(text).onEach {
+            container.regionTranslator.translateText(text, unsureDraft).onEach {
                 if (it is TranslationCardState.Done) autoCards[key] = it.translation
             }
         }
     }
 
     /** Texto da área agora (vazio ou erro = null). */
-    private suspend fun readArea(region: Rect): String? {
+    private suspend fun readArea(region: Rect): TranslationRepository.AreaText? {
         val shot = captureArea(region) ?: return null
         val crop = crop(shot, region) ?: return null
-        return runCatching { container.translationRepository.recognize(crop) }.getOrNull()?.trim()?.ifBlank { null }
+        val read = runCatching { container.translationRepository.recognizeArea(crop) }.getOrNull() ?: return null
+        return read.copy(text = read.text.trim()).takeIf { it.text.isNotEmpty() }
     }
 
     // --- Região fixa ---
@@ -702,6 +753,8 @@ class FloatingService : Service(), FloatingIcon.Listener {
         closeCard()
         editor = FixedRegionEditor(
             this, windows, settings.fixedRegion,
+            // O editor cobre a tela toda: o toque na bolinha chega nele e fecha, como o ✕.
+            closeArea = icon?.position?.takeIf { mode == TranslationMode.AUTO_REGION },
             onConfirm = { region ->
                 closeEditor()
                 settings.fixedRegion = region
@@ -715,9 +768,17 @@ class FloatingService : Service(), FloatingIcon.Listener {
             },
             onCancel = ::closeEditor,
         ).also { it.show() }
+        // Região automática: a bolinha fica armada por cima do editor; tocar de novo fecha.
+        if (mode == TranslationMode.AUTO_REGION) icon?.showArmedOnTop(true)
     }
 
+    private var editorClosedAt = 0L
+
     private fun closeEditor() {
+        if (editor != null) {
+            editorClosedAt = SystemClock.uptimeMillis()
+            icon?.showArmedOnTop(false)
+        }
         editor?.remove()
         editor = null
     }
@@ -766,6 +827,10 @@ class FloatingService : Service(), FloatingIcon.Listener {
         private const val HINT_OFFSET_PX = 140
         private const val HINT_MS = 2_500L
         private const val SHEET_EXIT_MS = 300L
+        /** Diagnóstico da versão (dev): `adb logcat -s WT-Dev`. */
+        private const val DEV_TAG = "WT-Dev"
+        /** Até esse tempo depois de fechar o editor, a captura espera um quadro novo. */
+        private const val FRESH_FRAME_MS = 1_500L
         private const val SPEED_SAMPLE = "Hey! Let's read some webtoons together."
         private const val WATCH_INTERVAL_MS = 100L
         /** A tela precisa ficar parada esse tempo pra contar como "parou de rolar". */
@@ -803,6 +868,19 @@ class FloatingService : Service(), FloatingIcon.Listener {
                     .putExtra(EXTRA_RESULT_CODE, resultCode)
                     .putExtra(EXTRA_DATA, data)
             )
+        }
+
+        /**
+         * Pedido de captura. No Android 14+ o usuário escolhe entre a tela inteira e um app só (aí
+         * só esse app entra na captura; fora dele o tradutor não enxerga nada).
+         */
+        fun captureIntent(context: Context): Intent {
+            val manager = context.getSystemService(MediaProjectionManager::class.java)
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForUserChoice())
+            } else {
+                manager.createScreenCaptureIntent()
+            }
         }
 
         fun stopIntent(context: Context): Intent = Intent(context, FloatingService::class.java).setAction(ACTION_STOP)

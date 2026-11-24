@@ -1,6 +1,7 @@
 package com.deivide.webtoontranslator.di
 
 import android.content.Context
+import com.deivide.webtoontranslator.BuildConfig
 import com.deivide.webtoontranslator.data.backup.BackupRepository
 import com.deivide.webtoontranslator.data.diagnostics.ErrorLog
 import com.deivide.webtoontranslator.data.engine.EngineProvider
@@ -26,7 +27,11 @@ class AppContainer(context: Context) {
     val settingsRepository = SettingsRepository(context)
     val errorLog = ErrorLog(context)
     val readingPreferences = ReadingPreferences(context)
-    val translationRepository = TranslationRepository(engineProvider)
+    val translationRepository = TranslationRepository(
+        engineProvider,
+        // Versão (dev): guarda a última imagem que foi pro OCR, pra conferir pelo adb.
+        debugDir = context.getExternalFilesDir("debug").takeIf { BuildConfig.DEBUG },
+    )
     val libraryRepository = LibraryRepository(context)
     val speechPlayer = SpeechPlayer(context)
     val translationActions = TranslationActions(speechPlayer, settingsRepository, libraryRepository, readingPreferences)

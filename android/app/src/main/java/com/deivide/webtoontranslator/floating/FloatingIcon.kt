@@ -98,6 +98,18 @@ class FloatingIcon(
         runCatching { windows.removeView(view) }
     }
 
+    /**
+     * Mostra o ícone armado por cima de uma janela que acabou de abrir (o editor da região
+     * automática): o toque seguinte cai nele e desarma. [value] false só tira o destaque.
+     */
+    fun showArmedOnTop(value: Boolean) {
+        armed = value
+        if (value) runCatching {
+            windows.removeView(view)
+            windows.addView(view, params)
+        }
+    }
+
     /** Some da tela (sem sair do lugar) enquanto a captura é feita. */
     fun setHidden(hidden: Boolean) {
         view.visibility = if (hidden) View.INVISIBLE else View.VISIBLE
@@ -180,9 +192,10 @@ class FloatingIcon(
 
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             when (event.actionMasked) {
-                // Tocou em outra coisa (ou rolou a página): volta pra borda e desarma.
+                // Tocou em outra coisa (ou rolou a página): volta pra borda e desarma. Armado pelo
+                // editor da região automática (tapArms false), fica armado até o editor fechar.
                 MotionEvent.ACTION_OUTSIDE -> {
-                    if (armed) armed = false
+                    if (armed && tapArms) armed = false
                     dock()
                 }
                 MotionEvent.ACTION_DOWN -> {
@@ -202,7 +215,7 @@ class FloatingIcon(
                     val dy = event.rawY - downY
                     if (!dragging && hypot(dx, dy) > touchSlop && !longPressed) {
                         dragging = true
-                        selecting = armed
+                        selecting = armed && tapArms
                         docked = false
                         handler.removeCallbacks(longPress)
                     }

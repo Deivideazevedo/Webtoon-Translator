@@ -192,7 +192,7 @@
     <string name="permission_overlay_title">Permitir aparecer sobre outros apps</string>
     <string name="permission_overlay_body">O ícone flutuante fica por cima do seu app de webtoon. Na próxima tela, encontre o Webtoon Translator na lista e ative "Aparecer sobre outros apps".</string>
     <string name="permission_capture_title">Permitir captura da tela</string>
-    <string name="permission_capture_body">O app lê o texto do balão que você seleciona. Na próxima tela, escolha "Tela inteira" e toque em "Compartilhar tela".
+    <string name="permission_capture_body">O app lê o texto do balão que você seleciona. Na próxima tela, escolha "Tela inteira" (traduz em qualquer app) ou "Um único app" (só o app de leitura entra na captura) e confirme.
 
 Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próprio celular; só o texto lido vai pra IA. Enquanto o tradutor estiver ligado, o Android mostra um aviso de compartilhamento de tela.</string>
     <string name="permission_continue">Continuar</string>
@@ -214,6 +214,10 @@ Nada é gravado nem enviado além do recorte do balão, que vai pro OCR no próp
     <string name="error_not_configured">Configure a chave de API e o modelo em ⚙ Configurações.</string>
     <string name="error_no_english">Não encontrei texto em inglês pra traduzir nessa área.</string>
     <string name="error_no_text">Não encontrei texto nessa área. Tente pegar o balão inteiro.</string>
+    <string name="ocr_unsure">A letra deste balão é estilizada e o leitor de texto não teve certeza de parte dele, então a tradução pode ter ficado incompleta.</string>
+    <string name="ocr_type_text">Toque aqui para digitar o texto</string>
+    <string name="action_edit_text">Editar o texto em inglês</string>
+    <string name="ocr_type_title">Digitar o texto</string>
     <string name="error_no_text_screen">Não encontrei balões com texto nesta tela.</string>
     <string name="error_translate_failed">Não consegui traduzir agora.</string>
     <string name="error_read_failed">Não consegui ler o texto dessa área.</string>

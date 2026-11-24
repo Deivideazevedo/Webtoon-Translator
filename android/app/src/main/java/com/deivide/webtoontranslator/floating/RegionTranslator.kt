@@ -30,28 +30,33 @@ class RegionTranslator(
             return@flow
         }
         emit(TranslationCardState.Reading)
-        val text = try {
-            translations.recognize(image)
+        val read = try {
+            translations.recognizeArea(image)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             errors.add("OCR", e)
-            emit(TranslationCardState.Failed(UiText.Resource(R.string.error_read_failed), retryable = true))
+            emit(TranslationCardState.Failed(UiText.Resource(R.string.error_read_failed), retryable = true, model = settings.load().model))
             return@flow
         }
-        if (text.isBlank()) {
-            emit(TranslationCardState.Failed(UiText.Resource(R.string.error_no_text)))
+        if (read.text.isBlank()) {
+            emit(
+                TranslationCardState.Failed(
+                    UiText.Resource(R.string.error_no_text), model = settings.load().model, unsureDraft = read.unsureDraft,
+                )
+            )
             return@flow
         }
-        emitAll(translateText(text))
+        emitAll(translateText(read.text, read.unsureDraft))
     }
 
     /**
      * Tradução completa (didática) de um texto já lido, ex.: um balão da tela cheia. Falhas
      * passageiras (rede, API, JSON quebrado pelo modelo) são tentadas de novo uma vez sem avisar;
      * se falhar de novo, o cartão mostra só uma mensagem curta e os detalhes vão pro [ErrorLog].
+     * [unsureDraft]: o OCR não teve certeza de parte do texto (ver [TranslationCardState.Done]).
      */
-    fun translateText(text: String): Flow<TranslationCardState> = flow {
+    fun translateText(text: String, unsureDraft: String? = null): Flow<TranslationCardState> = flow {
         val current = settings.load()
         if (!current.isConfigured) {
             emit(TranslationCardState.Failed(UiText.Resource(R.string.error_not_configured)))
@@ -75,11 +80,15 @@ class RegionTranslator(
                             TranslationCardState.Failed(
                                 if (reason.isNotEmpty()) UiText.Raw(reason) else UiText.Resource(R.string.error_no_english),
                                 retryable = true,
+                                model = current.model,
+                                unsureDraft = unsureDraft,
                             )
                         )
                         return@collect
                     }
-                    card = card.apply(event)
+                    card = card.apply(event).let {
+                        if (it is TranslationCardState.Done && unsureDraft != null) it.copy(unsureDraft = unsureDraft) else it
+                    }
                     card?.let { emit(it) }
                     if (event is TranslationEvent.Done) library.addRecent(event.translation)
                 }
@@ -90,7 +99,7 @@ class RegionTranslator(
                 errors.add("tradução (tentativa ${attempt + 1})", e)
             }
         }
-        emit(TranslationCardState.Failed(UiText.Resource(R.string.error_translate_failed), retryable = true))
+        emit(TranslationCardState.Failed(UiText.Resource(R.string.error_translate_failed), retryable = true, model = current.model, unsureDraft = unsureDraft))
     }
 
     private companion object {

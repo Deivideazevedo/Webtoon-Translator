@@ -16,10 +16,22 @@ sealed interface TranslationCardState {
         val pronunciationIpa: String = "",
     ) : TranslationCardState
 
-    data class Done(val translation: Translation) : TranslationCardState
+    /**
+     * [unsureDraft]: o OCR não teve certeza de parte do texto (fonte estilizada); o cartão avisa e
+     * oferece digitar, já com tudo o que foi visto.
+     */
+    data class Done(val translation: Translation, val unsureDraft: String? = null) : TranslationCardState
 
-    /** [retryable]: falha passageira (API, rede, resposta quebrada) → o cartão oferece "Tentar de novo". */
-    data class Failed(val message: UiText, val retryable: Boolean = false) : TranslationCardState
+    /**
+     * [retryable]: falha passageira (API, rede, resposta quebrada) → o cartão oferece "Tentar de novo".
+     * [model]: o modelo em uso; o rodapé dele aparece pra trocar por outro. [unsureDraft]: como em [Done].
+     */
+    data class Failed(
+        val message: UiText,
+        val retryable: Boolean = false,
+        val model: String? = null,
+        val unsureDraft: String? = null,
+    ) : TranslationCardState
 }
 
 /** Aplica um evento do streaming ao cartão (ignorado se o cartão foi fechado nesse meio-tempo). */

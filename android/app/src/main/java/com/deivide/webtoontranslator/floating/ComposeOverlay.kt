@@ -2,6 +2,7 @@ package com.deivide.webtoontranslator.floating
 
 import android.content.Context
 import android.graphics.Rect
+import android.os.Build
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -9,6 +10,8 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.compose.runtime.getValue
@@ -28,6 +31,8 @@ class ComposeOverlay(
     private val onOutsideTouch: (() -> Unit)? = null,
     private val onTouchDown: (() -> Unit)? = null,
     backHandler: (() -> Unit)? = null,
+    /** Janela com campo de texto: recebe o teclado (e sobe o conteúdo acima dele). */
+    private val keyboard: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     /** Trocável com a janela aberta ([setOnBack]). */
@@ -66,11 +71,33 @@ class ComposeOverlay(
         })
         if (backHandler != null) isFocusableInTouchMode = true
     }
+
+    /**
+     * Mede o teclado numa janela invisível de tela inteira (sem toque), abaixo desta: os insets
+     * da própria janela dependem do tamanho dela, e crescer com eles vira um vai e volta que
+     * derruba o teclado. A altura medida sobe o conteúdo desta janela (que não encolhe sozinha).
+     */
+    private val imeProbe = if (!keyboard) null else View(context).apply {
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            view.setPadding(0, 0, 0, (ime - nav).coerceAtLeast(0))
+            insets
+        }
+    }
     private var shown = false
 
     fun show(params: WindowManager.LayoutParams) {
         if (onOutsideTouch != null) params.flags = params.flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
-        params.flags = if (onBack != null) {
+        params.flags = if (keyboard) {
+            val adjust = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING // a altura do teclado vem nos insets
+            } else {
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            }
+            params.softInputMode = adjust or WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+            params.flags and (WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM).inv()
+        } else if (onBack != null) {
             // Focável (pra receber o voltar), mas sem virar alvo do teclado no lugar do app de baixo.
             (params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()) or
                 WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
@@ -83,6 +110,12 @@ class ComposeOverlay(
             windows.updateViewLayout(view, params)
         } else {
             lifecycle.start()
+            imeProbe?.let {
+                val probe = overlayParams(
+                    WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT, touchable = false,
+                ).apply { softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING }
+                windows.addView(it, probe)
+            }
             windows.addView(view, params)
             shown = true
         }
@@ -111,6 +144,7 @@ class ComposeOverlay(
     fun remove() {
         if (!shown) return
         runCatching { windows.removeView(view) }
+        imeProbe?.let { runCatching { windows.removeView(it) } }
         lifecycle.destroy()
         shown = false
     }

@@ -54,6 +54,8 @@ internal fun FloatingSheet(
     title: String,
     onClose: () -> Unit,
     onBack: (() -> Unit)? = null,
+    /** false: sem fundo escuro; a janela é só o sheet e a página de baixo continua rolando. */
+    modal: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val isOpen by open.collectAsStateWithLifecycle()
@@ -61,8 +63,8 @@ internal fun FloatingSheet(
     val shown = remember { MutableTransitionState(false) }
     shown.targetState = isOpen
 
-    Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(shown, enter = fadeIn(), exit = fadeOut()) {
+    Box(if (modal) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
+        if (modal) AnimatedVisibility(shown, enter = fadeIn(), exit = fadeOut()) {
             Box(
                 Modifier
                     .fillMaxSize()

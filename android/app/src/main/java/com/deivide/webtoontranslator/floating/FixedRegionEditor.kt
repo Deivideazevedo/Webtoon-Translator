@@ -29,6 +29,8 @@ class FixedRegionEditor(
     context: Context,
     private val windows: WindowManager,
     initial: Rect?,
+    /** Toque aqui (a bolinha, que fica embaixo do editor) fecha, como o ✗. */
+    private val closeArea: Rect? = null,
     private val onConfirm: (Rect) -> Unit,
     private val onCancel: () -> Unit,
 ) {
@@ -133,6 +135,7 @@ class FixedRegionEditor(
                 MotionEvent.ACTION_DOWN -> {
                     last = PointF(x, y)
                     drag = when {
+                        onCloseArea(x, y) -> Drag.NONE
                         near(x, y, region.left, region.top) -> Drag.TL
                         near(x, y, region.right, region.top) -> Drag.TR
                         near(x, y, region.left, region.bottom) -> Drag.BL
@@ -161,7 +164,7 @@ class FixedRegionEditor(
                     if (drag == Drag.NONE) {
                         when {
                             hit(x, y, confirmCenter()) -> onConfirm(result())
-                            hit(x, y, cancelCenter()) -> onCancel()
+                            hit(x, y, cancelCenter()) || onCloseArea(x, y) -> onCancel()
                         }
                     } else if (drag == Drag.NEW && (region.width() < minSize || region.height() < minSize)) {
                         region.right = region.left + max(region.width(), minSize)
@@ -176,6 +179,7 @@ class FixedRegionEditor(
 
         private fun near(x: Float, y: Float, cx: Float, cy: Float) = hypot(x - cx, y - cy) < handleTouch
         private fun hit(x: Float, y: Float, c: PointF) = hypot(x - c.x, y - c.y) < buttonRadius * 1.3f
+        private fun onCloseArea(x: Float, y: Float) = closeArea?.contains(x.toInt(), y.toInt()) == true
 
         private fun result(): Rect {
             val r = Rect()

@@ -638,7 +638,7 @@ pub async fn call_google_text(
 /// mesma carga de uma captura: prompt real + JSON completo (com breakdown e glosa).
 pub const SPEED_TEST_TEXT: &str = "YOU REALLY HACKED IT TO PIECES.\nI DIDN'T THINK YOU'D GO THAT FAR, KID.";
 
-pub const BENCH_TIMEOUT_SECS: u64 = 25;
+pub const BENCH_TIMEOUT_SECS: u64 = 15;
 
 /// Tempo até o JSON completo de uma tradução de teste. Conta como falha se estourar o
 /// timeout ou se a resposta não vier no formato esperado (rápido mas inútil não serve).

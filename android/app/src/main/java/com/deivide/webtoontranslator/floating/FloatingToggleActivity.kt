@@ -2,9 +2,6 @@ package com.deivide.webtoontranslator.floating
 
 import android.app.Activity
 import android.content.Intent
-import android.media.projection.MediaProjectionConfig
-import android.media.projection.MediaProjectionManager
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -37,16 +34,7 @@ class FloatingToggleActivity : ComponentActivity() {
                 startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 finish()
             }
-            else -> {
-                val manager = getSystemService(MediaProjectionManager::class.java)
-                capture.launch(
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
-                    } else {
-                        manager.createScreenCaptureIntent()
-                    }
-                )
-            }
+            else -> capture.launch(FloatingService.captureIntent(this))
         }
     }
 }

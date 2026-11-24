@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,6 +62,8 @@ class TranslationCardActions(
     val onRetry: (() -> Unit)? = null,
     /** Toque no rodapé "modelo · tempo ▾": escolher outro modelo e traduzir de novo. */
     val onPickModel: (() -> Unit)? = null,
+    /** "Digitar o texto" quando o OCR não teve certeza (recebe o que ele viu, pra corrigir). */
+    val onTypeText: ((draft: String) -> Unit)? = null,
 )
 
 /**
@@ -132,6 +135,12 @@ private fun CardHeader(
         // os que precisam dela pronta ficam apagados até lá.
         val ready = translation != null
         leading()
+        // ✏️ corrigir o inglês (ex.: um nome lido/digitado errado) e traduzir de novo.
+        actions.onTypeText?.let { edit ->
+            CircleAction(Icons.Filled.Edit, stringResource(R.string.action_edit_text), enabled = ready) {
+                translation?.let { edit(it.originalText) }
+            }
+        }
         CircleAction(Icons.Filled.ContentCopy, stringResource(R.string.action_copy), enabled = ready) {
             translation?.let {
                 context.getSystemService(ClipboardManager::class.java).setPrimaryClip(
@@ -176,6 +185,8 @@ private fun CardBody(state: TranslationCardState, options: ReadingOptions, actio
                     Text(stringResource(R.string.action_retry), color = MaterialTheme.colorScheme.primary)
                 }
             }
+            UnsureReading(state.unsureDraft, actions.onTypeText)
+            state.model?.takeIf { it.isNotBlank() }?.let { ModelFooter(it, actions.onPickModel) }
         }
         is TranslationCardState.Streaming -> TextBlock(
             state.original, emptyList(), state.pronunciationPt, state.pronunciationIpa, options, actions,
@@ -191,6 +202,7 @@ private fun CardBody(state: TranslationCardState, options: ReadingOptions, actio
                 Text(t.translation, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
             }
             if (options.learnOpen) LearnSection(t, options, actions)
+            UnsureReading(state.unsureDraft, actions.onTypeText)
             ModelFooter(stringResource(R.string.result_footer, t.model, t.durationSecs), actions.onPickModel)
         }
     }
@@ -222,6 +234,25 @@ private fun TextBlock(
                 onSpeakWord = { actions.onSpeak(it, false) },
             )
             Pronunciation(pt, ipa, options, Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+/**
+ * O OCR não teve certeza de parte do texto (fonte estilizada): explica e oferece digitar, já com
+ * o que ele viu. Sem [draft] (leitura segura) ou sem [onTypeText], não aparece.
+ */
+@Composable
+private fun UnsureReading(draft: String?, onTypeText: ((String) -> Unit)?) {
+    if (draft == null || onTypeText == null) return
+    Column(Modifier.padding(top = 8.dp)) {
+        Text(
+            stringResource(R.string.ocr_unsure),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp,
+        )
+        TextButton(onClick = { onTypeText(draft) }) {
+            Text(stringResource(R.string.ocr_type_text), color = MaterialTheme.colorScheme.primary)
         }
     }
 }

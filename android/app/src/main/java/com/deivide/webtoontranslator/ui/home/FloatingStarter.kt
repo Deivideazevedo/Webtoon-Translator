@@ -4,10 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import android.media.projection.MediaProjectionConfig
-import android.media.projection.MediaProjectionManager
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,7 +32,7 @@ import com.deivide.webtoontranslator.floating.FloatingService
  * Liga o tradutor flutuante pedindo, na ordem, cada permissão necessária — sempre explicando
  * antes do aviso do Android (ideia do Translate On Screen):
  * 1. aparecer sobre outros apps (tela de configurações do sistema);
- * 2. captura da tela (escolher "Tela inteira").
+ * 2. captura da tela (a tela inteira ou só o app de leitura).
  * Depois o app vai pro fundo, deixando só o ícone flutuante. (A notificação que o Android exige
  * pra captura existe sem pedir permissão; só não aparece na gaveta.)
  */
@@ -56,7 +53,7 @@ fun rememberFloatingStarter(): FloatingStarter {
             context.findActivity()?.moveTaskToBack(true)
         }
     }
-    val requestCapture = { captureLauncher.launch(captureIntent(context)) }
+    val requestCapture = { captureLauncher.launch(FloatingService.captureIntent(context)) }
     val afterOverlay = {
         if (settings.skipCaptureExplanation) requestCapture() else step = Step.EXPLAIN_CAPTURE
     }
@@ -100,16 +97,6 @@ fun rememberFloatingStarter(): FloatingStarter {
         FloatingStarter {
             if (Settings.canDrawOverlays(context)) afterOverlay() else step = Step.EXPLAIN_OVERLAY
         }
-    }
-}
-
-/** Android 14+: já pede a tela inteira (sem a opção de compartilhar um app só). */
-private fun captureIntent(context: Context): Intent {
-    val manager = context.getSystemService(MediaProjectionManager::class.java)
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
-    } else {
-        manager.createScreenCaptureIntent()
     }
 }
 
