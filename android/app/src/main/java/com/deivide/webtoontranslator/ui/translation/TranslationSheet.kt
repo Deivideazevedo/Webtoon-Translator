@@ -151,7 +151,14 @@ class TranslationSheetViewModel(
     private fun translate(english: String) {
         text = english
         job?.cancel()
-        job = viewModelScope.launch { translator.translateText(english).collect { card.value = it } }
+        job = viewModelScope.launch {
+            translator.translateText(english).collect { state ->
+                card.value = state
+                if (state is TranslationCardState.Done) {
+                    actions.autoSpeak(state.translation)?.let { _notices.tryEmit(it) }
+                }
+            }
+        }
     }
 
     fun retry() = translate(text)

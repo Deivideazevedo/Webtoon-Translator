@@ -148,6 +148,14 @@ class FloatingService : Service(), FloatingIcon.Listener {
         icon = FloatingIcon(this, windows, this).also { it.show() }
         // O modo pode mudar por fora (tela Inicial); o ícone se ajusta sozinho.
         scope.launch { settings.mode.collect(::applyMode) }
+        // Tradução pronta no cartão (nova ou do cache dos automáticos): fala, se a opção estiver ligada.
+        scope.launch {
+            card.collect { state ->
+                if (state is TranslationCardState.Done) {
+                    container.translationActions.autoSpeak(state.translation)?.let { toast(it.resolve(this@FloatingService)) }
+                }
+            }
+        }
         // Carrega o modelo do OCR já (a 1ª leitura não paga isso).
         scope.launch { container.translationRepository.warmUpOcr() }
         // A opção pode mudar com o cartão aberto (⚙ do cartão ou Mais → Aparência).

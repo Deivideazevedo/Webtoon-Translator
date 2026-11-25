@@ -116,7 +116,7 @@ cortar a barra de status. O Translate On Screen não faz isso e traduz o própri
 | # | Item | Status |
 |---|---|---|
 | 31 | **Modo região fixa**: desenhar a área uma vez (alças nos cantos, ✓/✗); cada toque no ícone traduz de novo; botão "selecionar de novo" no cartão 💡 | ➖ (virou M4) |
-| 32 | **Editar o texto do OCR** e traduzir de novo (quando o OCR erra uma letra) 💡 | ⬜ |
+| 32 | **Editar o texto do OCR** e traduzir de novo (quando o OCR erra uma letra) 💡 | ✅ (✏️ no cartão edita o inglês; folha presa embaixo, sobe com o teclado) |
 | 33 | Personalizar o ícone flutuante: tamanho, transparência, cor 💡 | ⬜ |
 | 34 | Ações configuráveis no toque duplo e no toque longo do ícone 💡 | ⬜ |
 | 35 | Tutorial curto na primeira abertura (e no menu "?") 💡 | ✅ (Android: abre na primeira vez e em Mais → Tutorial) |
@@ -128,7 +128,7 @@ cortar a barra de status. O Translate On Screen não faz isso e traduz o própri
 |---|---|---|
 | 37 | Aba **"Traduzir texto"**: digitar ou colar uma frase, com a mesma análise didática 💡 | ➖ (vira parte da aba Traduções, L5) |
 | 38 | Traduzir pela **câmera** (livro/mangá físico) 💡 | ⬜ |
-| 39 | Capturar **só um app** (Android 14+), por privacidade 💡 | ⬜ |
+| 39 | Capturar **só um app** (Android 14+), por privacidade 💡 | ✅ (captura de tela inteira ou de um app só) |
 
 ### Fora do escopo (decidido)
 

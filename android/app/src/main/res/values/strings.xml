@@ -42,6 +42,8 @@
     <string name="more_voice_desc">Voz do celular, tom e velocidade</string>
     <string name="voice_speed">Velocidade</string>
     <string name="voice_label">Voz</string>
+    <string name="voice_auto_speak">Ouvir ao traduzir</string>
+    <string name="voice_auto_speak_desc">Fala o inglês sozinho quando a tradução fica pronta</string>
     <string name="more_section_data">Dados</string>
     <string name="more_section_support">Suporte</string>
     <string name="more_appearance_desc">Tema, pronúncia em IPA e transparência do cartão</string>

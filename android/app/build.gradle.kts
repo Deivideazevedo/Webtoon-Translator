@@ -14,8 +14,8 @@ android {
         applicationId = "com.deivide.webtoontranslator"
         minSdk = 29
         targetSdk = 37
-        versionCode = 3
-        versionName = "0.2.2"
+        versionCode = 4
+        versionName = "0.2.3"
         ndk {
             abiFilters += "arm64-v8a"
         }

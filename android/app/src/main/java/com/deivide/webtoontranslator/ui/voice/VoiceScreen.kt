@@ -3,6 +3,8 @@ package com.deivide.webtoontranslator.ui.voice
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -10,10 +12,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,6 +47,7 @@ import com.deivide.webtoontranslator.ui.components.OptionSheet
 import com.deivide.webtoontranslator.ui.components.SectionCard
 import com.deivide.webtoontranslator.ui.components.SectionTitle
 import com.deivide.webtoontranslator.ui.components.SelectorField
+import com.deivide.webtoontranslator.ui.components.SettingRow
 import com.deivide.webtoontranslator.ui.theme.AppTheme
 import java.util.Locale
 
@@ -67,7 +72,12 @@ fun VoiceScreen(onBack: () -> Unit) {
     var voice by remember { mutableStateOf(settings.voiceName) }
     var pitch by remember { mutableFloatStateOf(settings.speechPitch) }
     var speed by remember { mutableFloatStateOf(settings.load().speechSpeed) }
+    var autoSpeak by remember { mutableStateOf(settings.autoSpeak) }
     var choosingVoice by rememberSaveable { mutableStateOf(false) }
+    fun changeAutoSpeak(on: Boolean) {
+        autoSpeak = on
+        settings.autoSpeak = on
+    }
     fun preview(voiceName: String? = voice) {
         val message = when (speech.speak(SAMPLE, AppSettings.nativeRate(speed), pitch, voiceName)) {
             SpeechPlayer.Result.Spoken -> null
@@ -135,6 +145,17 @@ fun VoiceScreen(onBack: () -> Unit) {
                         settings.setSpeechSpeed(speed)
                         preview()
                     },
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            SectionCard(padding = false) {
+                SettingRow(
+                    icon = Icons.Filled.PlayCircle,
+                    color = AppTheme.colors.icons.green,
+                    title = stringResource(R.string.voice_auto_speak),
+                    subtitle = stringResource(R.string.voice_auto_speak_desc),
+                    onClick = { changeAutoSpeak(!autoSpeak) },
+                    trailing = { Switch(checked = autoSpeak, onCheckedChange = ::changeAutoSpeak) },
                 )
             }
         }

@@ -33,6 +33,10 @@ class TranslationActions(
         }
     }
 
+    /** Tradução que acabou de chegar: fala o inglês se a opção estiver ligada (retorno como [speak]). */
+    fun autoSpeak(translation: Translation): UiText? =
+        if (settings.autoSpeak) speak(translation.originalText, slow = false) else null
+
     suspend fun toggleFavorite(translation: Translation) {
         val isFavorite = translation.id in library.library.value.favoriteIds
         library.setFavorite(translation, favorite = !isFavorite)

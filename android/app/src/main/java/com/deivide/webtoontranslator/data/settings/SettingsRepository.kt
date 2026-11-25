@@ -190,6 +190,11 @@ class SettingsRepository(context: Context) {
         get() = prefs.getString(KEY_VOICE, null)
         set(value) = prefs.edit { putString(KEY_VOICE, value) }
 
+    /** Ouvir o inglês sozinho quando uma tradução termina (tela Voz). */
+    var autoSpeak: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_SPEAK, false)
+        set(value) = prefs.edit { putBoolean(KEY_AUTO_SPEAK, value) }
+
     /** Velocidade da fala (tela Voz), sem mexer no resto. */
     fun setSpeechSpeed(speed: Float) {
         prefs.edit { putFloat(KEY_SPEECH_SCALE, speed) }
@@ -260,6 +265,7 @@ class SettingsRepository(context: Context) {
 
         private const val KEY_PITCH = "speech_pitch"
         private const val KEY_VOICE = "voice_name"
+        private const val KEY_AUTO_SPEAK = "auto_speak"
         private const val KEY_PROVIDER = "provider"
         private const val KEY_BASE_URL = "base_url"
         private const val KEY_MODEL = "model"
